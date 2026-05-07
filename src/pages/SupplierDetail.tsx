@@ -1,0 +1,142 @@
+
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { MOCK_SUPPLIERS } from '../data/mockData';
+import { MapPin, Star, MessageCircle, ShieldCheck, Briefcase, FileText, CheckCircle2, ChevronLeft } from 'lucide-react';
+import { useApp } from '../context/AppContext';
+
+export const SupplierDetail = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { setActiveChatId, allCars } = useApp();
+  const supplier = MOCK_SUPPLIERS.find(s => s.id === id);
+  const supplierCars = allCars.filter(c => c.поставщикId === id);
+
+  if (!supplier) return <div className="text-center py-20">Поставщик не найден</div>;
+
+  const handleWrite = () => {
+    if (id) {
+      setActiveChatId(id);
+      navigate('/messages');
+    }
+  };
+
+  const reviews = [
+    { user: 'Дмитрий В.', text: 'Заказывал BMW X5. Привезли быстрее чем обещали, состояние идеальное. Спасибо за честность!', date: '12.04.2024', rating: 5 },
+    { user: 'Анна К.', text: 'Помогли с растаможкой и СБКТС. Профессионалы своего дела.', date: '05.04.2024', rating: 5 },
+    { user: 'Игорь', text: 'Все документы проверили, машина соответствует отчету. Рекомендую.', date: '28.03.2024', rating: 4 },
+  ];
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <Link to="/suppliers" className="inline-flex items-center gap-2 text-gray-400 hover:text-primary transition-colors">
+        <ChevronLeft size={20} /> Назад к списку
+      </Link>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left: Info */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-dark-card border border-white/5 rounded-3xl overflow-hidden p-8 text-center space-y-6">
+            <div className="relative inline-block">
+              <img src={supplier.фотографии[0]} className="w-32 h-32 rounded-3xl object-cover mx-auto ring-4 ring-primary/20" />
+              {supplier.документыСтатус === 'проверен' && (
+                <div className="absolute -bottom-2 -right-2 bg-green-500 text-white p-1.5 rounded-full border-4 border-dark-card">
+                  <CheckCircle2 size={16} />
+                </div>
+              )}
+            </div>
+            
+            <div>
+              <h1 className="text-2xl font-bold">{supplier.название}</h1>
+              <div className="flex items-center justify-center gap-2 text-gray-400 text-sm mt-2">
+                <MapPin size={16} /> {supplier.город}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white/5 p-4 rounded-2xl">
+                <div className="text-xl font-bold text-primary">⭐ {supplier.рейтинг}</div>
+                <div className="text-[10px] text-gray-500 uppercase">Рейтинг</div>
+              </div>
+              <div className="bg-white/5 p-4 rounded-2xl">
+                <div className="text-xl font-bold text-primary">{supplier.опыт}</div>
+                <div className="text-[10px] text-gray-500 uppercase">Опыт</div>
+              </div>
+            </div>
+
+            <button 
+              onClick={handleWrite}
+              className="w-full bg-primary hover:bg-primary-hover text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all"
+            >
+              <MessageCircle size={20} /> Связаться
+            </button>
+          </div>
+
+          <div className="bg-dark-card border border-white/5 rounded-3xl p-6 space-y-4">
+            <h3 className="font-bold">Верификация</h3>
+            <div className="space-y-3">
+              {[
+                { label: 'Регистрация ИП/ООО', icon: FileText },
+                { label: 'Паспортные данные', icon: ShieldCheck },
+                { label: 'История сделок', icon: Briefcase },
+              ].map((item, i) => (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-3 text-gray-400">
+                    <item.icon size={16} />
+                    {item.label}
+                  </div>
+                  <CheckCircle2 size={16} className="text-green-500" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Cars & About */}
+        <div className="lg:col-span-2 space-y-8">
+          <div className="bg-dark-card border border-white/5 rounded-3xl p-8 space-y-6">
+            <h2 className="text-2xl font-bold">О поставщике</h2>
+            <p className="text-gray-400 leading-relaxed">{supplier.описание}</p>
+          </div>
+
+          <div className="bg-dark-card border border-white/5 rounded-3xl p-8 space-y-6">
+            <h2 className="text-2xl font-bold mb-4">Отзывы клиентов</h2>
+            <div className="space-y-6">
+              {reviews.map((rev, i) => (
+                <div key={i} className="border-b border-white/5 pb-6 last:border-none last:pb-0">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="font-bold text-sm">{rev.user}</div>
+                    <div className="flex text-primary">
+                      {[...Array(rev.rating)].map((_, i) => <Star key={i} size={12} fill="currentColor" />)}
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-400 italic mb-2">"{rev.text}"</p>
+                  <div className="text-[10px] text-gray-600 uppercase font-bold">{rev.date}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold">Автомобили в наличии ({supplierCars.length})</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {supplierCars.map(car => (
+                <Link key={car.id} to={`/catalog/${car.id}`} className="bg-dark-card border border-white/5 rounded-2xl overflow-hidden group">
+                  <div className="aspect-video overflow-hidden">
+                    <img src={car.изображения[0]} className="w-full h-full object-cover group-hover:scale-105 transition-all duration-500" />
+                  </div>
+                  <div className="p-4">
+                    <h4 className="font-bold">{car.марка} {car.модель}</h4>
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="text-primary font-bold">{car.цена.toLocaleString()} ₽</span>
+                      <span className="text-xs text-gray-500">{car.год} г.</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

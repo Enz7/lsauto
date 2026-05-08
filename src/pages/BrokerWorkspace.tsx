@@ -1,18 +1,16 @@
 
 import { useApp } from '../context/AppContext';
-import { МOCK_CARS, MOCK_REQUESTS } from '../data/mockData';
-import { Briefcase, Search, UserCheck, ArrowRight, Car, MessageCircle, Star } from 'lucide-react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { MOCK_REQUESTS } from '../data/mockData';
+import { Briefcase, Search, UserCheck, MessageCircle, Star } from 'lucide-react';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 export const BrokerWorkspace = () => {
-  const { userRole, isLoggedIn, addedCars, notify, setActiveChatId } = useApp();
+  const { userRole, isLoggedIn, allCars, notify, setActiveChatId } = useApp();
   const navigate = useNavigate();
 
   if (!isLoggedIn || userRole !== 'Посредник') {
     return <Navigate to="/login" replace />;
   }
-
-  const allCars = [...addedCars, ...МOCK_CARS];
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700 pb-20">

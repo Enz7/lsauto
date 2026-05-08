@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Send, CheckCircle2, MoreVertical, Paperclip, MessageCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -41,9 +41,17 @@ export const Messages = () => {
     }
   }, [activeChatId, displayChats, setActiveChatId]);
 
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [displayChats, activeChatIndex, isTyping]);
+
   const handleSend = () => {
     if (!text.trim()) return;
-    sendMessage(chats[activeChatIndex].id, text);
+    sendMessage(displayChats[activeChatIndex].id, text);
     setText('');
   };
 
@@ -114,9 +122,9 @@ export const Messages = () => {
               </button>
             </div>
 
-            {/* Messages */}
-            <div className="flex-grow overflow-y-auto p-6 space-y-6">
-              {displayChats[activeChatIndex].history.map((msg, i) => (
+        {/* Messages */}
+        <div ref={scrollRef} className="flex-grow overflow-y-auto p-6 space-y-6 scroll-smooth">
+          {displayChats[activeChatIndex].history.map((msg, i) => (
                 <div key={i} className={`flex flex-col ${msg.isOwn ? 'items-end' : 'items-start'}`}>
                   <div className={`p-4 rounded-2xl max-w-[70%] ${msg.isOwn ? 'bg-primary text-black rounded-tr-none' : 'bg-white/5 border border-white/10 text-white rounded-tl-none'}`}>
                     <p className="text-sm">{msg.text}</p>

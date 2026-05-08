@@ -7,7 +7,7 @@ import { useApp } from '../context/AppContext';
 export const SupplierDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { setActiveChatId, allCars } = useApp();
+  const { setActiveChatId, allCars, notify } = useApp();
   const supplier = MOCK_SUPPLIERS.find(s => s.id === id);
   const supplierCars = allCars.filter(c => c.поставщикId === id);
 
@@ -20,11 +20,12 @@ export const SupplierDetail = () => {
     }
   };
 
-  const reviews = [
+  const { reviews: contextReviews } = useApp();
+  const staticReviews = [
     { user: 'Дмитрий В.', text: 'Заказывал BMW X5. Привезли быстрее чем обещали, состояние идеальное. Спасибо за честность!', date: '12.04.2024', rating: 5 },
     { user: 'Анна К.', text: 'Помогли с растаможкой и СБКТС. Профессионалы своего дела.', date: '05.04.2024', rating: 5 },
-    { user: 'Игорь', text: 'Все документы проверили, машина соответствует отчету. Рекомендую.', date: '28.03.2024', rating: 4 },
   ];
+  const reviews = [...(contextReviews.filter((r: any) => r.supplierId === id)), ...staticReviews];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -99,7 +100,15 @@ export const SupplierDetail = () => {
           </div>
 
           <div className="bg-dark-card border border-white/5 rounded-3xl p-8 space-y-6">
-            <h2 className="text-2xl font-bold mb-4">Отзывы клиентов</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Отзывы клиентов</h2>
+              <button 
+                onClick={() => notify('Форма отзыва будет доступна после завершения сделки', 'info')}
+                className="text-xs font-bold text-primary hover:underline"
+              >
+                Оставить отзыв
+              </button>
+            </div>
             <div className="space-y-6">
               {reviews.map((rev, i) => (
                 <div key={i} className="border-b border-white/5 pb-6 last:border-none last:pb-0">

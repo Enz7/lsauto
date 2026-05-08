@@ -30,15 +30,12 @@ export const SupplierDashboard = () => {
   const handleCreatePost = (e: React.FormEvent) => {
     e.preventDefault();
     addPost({
-      id: Date.now(),
-      supplier: 'China Auto Export',
+      supplierId: 's1',
+      supplierName: 'China Auto Export',
       type: postData.type,
       title: postData.title,
       text: postData.text,
       image: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800',
-      likes: 0,
-      comments: 0,
-      date: 'Только что'
     });
     setIsPostModalOpen(false);
     notify('Пост опубликован в ленте!', 'success');

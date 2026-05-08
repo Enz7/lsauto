@@ -7,16 +7,31 @@ import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 
 export const Registration = () => {
-  const { login } = useApp();
+  const { login, notify } = useApp();
   const navigate = useNavigate();
   const [role, setRole] = useState<'Клиент' | 'Поставщик' | 'Посредник'>('Клиент');
 
-  const handleSubmit = (e: any) => {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', phone: '' });
+
+  const handleSubmit = async (e: any) => {
     e.preventDefault();
-    login(role);
-    if (role === 'Поставщик') navigate('/dashboard');
-    else if (role === 'Посредник') navigate('/catalog');
-    else navigate('/');
+    console.log('БРАУЗЕР: Нажата кнопка регистрации. Роль:', role);
+    console.log('БРАУЗЕР: Данные формы:', formData);
+    
+    setLoading(true);
+    try {
+      await login(role, formData);
+      console.log('БРАУЗЕР: Успешный ответ от функции login');
+      if (role === 'Поставщик') navigate('/dashboard');
+      else if (role === 'Посредник') navigate('/catalog');
+      else navigate('/');
+    } catch (err) {
+      console.error('БРАУЗЕР: Ошибка в handleSubmit:', err);
+      notify('Ошибка при регистрации. Проверьте терминал сервера.', 'info');
+    } finally {
+      setLoading(false);
+    }
   };
 
 
@@ -66,25 +81,25 @@ export const Registration = () => {
               <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
                 <User size={14} /> ФИО / Название компании
               </label>
-              <input type="text" placeholder="Иван Иванов" className="w-full bg-dark-input border border-white/10 rounded-xl py-3 px-4 focus:ring-1 focus:ring-primary outline-none" />
+              <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required placeholder="Иван Иванов" className="w-full bg-dark-input border border-white/10 rounded-xl py-3 px-4 focus:ring-1 focus:ring-primary outline-none" />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
                 <Mail size={14} /> E-mail
               </label>
-              <input type="email" placeholder="example@mail.ru" className="w-full bg-dark-input border border-white/10 rounded-xl py-3 px-4 focus:ring-1 focus:ring-primary outline-none" />
+              <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required placeholder="example@mail.ru" className="w-full bg-dark-input border border-white/10 rounded-xl py-3 px-4 focus:ring-1 focus:ring-primary outline-none" />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
                 <Phone size={14} /> Телефон
               </label>
-              <input type="tel" placeholder="+7 (999) 000-00-00" className="w-full bg-dark-input border border-white/10 rounded-xl py-3 px-4 focus:ring-1 focus:ring-primary outline-none" />
+              <input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} required placeholder="+7 (999) 000-00-00" className="w-full bg-dark-input border border-white/10 rounded-xl py-3 px-4 focus:ring-1 focus:ring-primary outline-none" />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
                 <Lock size={14} /> Пароль
               </label>
-              <input type="password" placeholder="••••••••" className="w-full bg-dark-input border border-white/10 rounded-xl py-3 px-4 focus:ring-1 focus:ring-primary outline-none" />
+              <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required placeholder="••••••••" className="w-full bg-dark-input border border-white/10 rounded-xl py-3 px-4 focus:ring-1 focus:ring-primary outline-none" />
             </div>
           </div>
 
@@ -119,8 +134,11 @@ export const Registration = () => {
           )}
 
           <div className="pt-6">
-            <button className="w-full bg-primary hover:bg-primary-hover text-black font-bold py-4 rounded-2xl transition-all shadow-lg shadow-primary/20">
-              Зарегистрироваться как {role}
+            <button 
+              disabled={loading}
+              className="w-full bg-primary hover:bg-primary-hover text-black font-bold py-4 rounded-2xl transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+            >
+              {loading ? 'Создание аккаунта...' : `Зарегистрироваться как ${role}`}
             </button>
             <p className="text-center text-gray-500 text-sm mt-6">
               Уже есть аккаунт? <Link to="/login" className="text-primary hover:underline">Войти</Link>

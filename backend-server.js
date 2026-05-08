@@ -2,138 +2,79 @@
 import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
-import fs from 'fs';
 import bcrypt from 'bcryptjs';
-import multer from 'multer';
+import pkg from 'pg';
+import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-/**
- * LSAuto ULTIMATE BACKEND - Production Ready for MVP
- */
+// Настройка путей для ES-модулей
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
+// Явно указываем путь к .env файлу
+dotenv.config({ path: path.join(__dirname, '.env') });
+
+const { Pool } = pkg;
 const app = express();
-const PORT = 3000;
-const SECRET_KEY = 'lsauto_secret_ultra_key';
-const DB_FILE = './database.json';
+const PORT = process.env.PORT || 3000;
+const SECRET_KEY = process.env.JWT_SECRET || 'lsauto_secret_ultra_key';
 
-// Настройка хранилища для фото
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = './uploads';
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
+console.log('--- Инициализация сервера ---');
+console.log('DATABASE_URL из .env:', process.env.DATABASE_URL ? 'Найден (скрыто)' : 'НЕ НАЙДЕН!');
+
+const pool = new Pool({ 
+  connectionString: process.env.DATABASE_URL 
 });
-const upload = multer({ storage });
 
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static('uploads')); // Делаем папку с фото доступной по ссылке
 
-const readDB = () => {
-  if (!fs.existsSync(DB_FILE)) {
-    return { cars: [], requests: [], users: [], chats: [], reviews: [] };
-  }
-  return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-};
+// Логгер
+app.use((req, res, next) => {
+  console.log(`[${new Date().toLocaleTimeString()}] Запрос: ${req.method} ${req.url}`);
+  next();
+});
 
-const writeDB = (data) => fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-
-// Middleware для защиты маршрутов
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.sendStatus(401);
-
-  jwt.verify(token, SECRET_KEY, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
-    next();
-  });
-};
-
-// --- AUTH API ---
+// Маршрут регистрации
 app.post('/api/v1/auth/register', async (req, res) => {
-  const db = readDB();
+  console.log('Получены данные для регистрации:', req.body);
   const { email, password, role, name } = req.body;
   
-  if (db.users.find(u => u.email === email)) {
-    return res.status(400).json({ message: 'Пользователь уже существует' });
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email и пароль обязательны' });
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser = { id: Date.now().toString(), email, password: hashedPassword, role, name };
-  
-  db.users.push(newUser);
-  writeDB(db);
-  
-  const token = jwt.sign({ id: newUser.id, role: newUser.role }, SECRET_KEY);
-  res.json({ success: true, token, user: { id: newUser.id, email, role, name } });
-});
-
-app.post('/api/v1/auth/login', async (req, res) => {
-  const db = readDB();
-  const { email, password } = req.body;
-  const user = db.users.find(u => u.email === email);
-  
-  if (!user || !(await bcrypt.compare(password, user.password))) {
-    return res.status(401).json({ message: 'Неверный логин или пароль' });
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id, role, name',
+      [name || 'Пользователь', email, hashedPassword, role]
+    );
+    
+    const user = result.rows[0];
+    const token = jwt.sign({ id: user.id, role: user.role }, SECRET_KEY);
+    console.log('✅ Пользователь успешно создан в PostgreSQL!');
+    res.json({ success: true, token, user });
+  } catch (err) {
+    console.error('❌ Ошибка записи в базу:', err.message);
+    res.status(500).json({ message: 'Ошибка БД: ' + err.message });
   }
-  
-  const token = jwt.sign({ id: user.id, role: user.role }, SECRET_KEY);
-  res.json({ success: true, token, user: { id: user.id, email: user.email, role: user.role, name: user.name } });
 });
 
-// --- MEDIA API (Загрузка фото) ---
-app.post('/api/v1/upload', upload.single('image'), (req, res) => {
-  if (!req.file) return res.status(400).send('Файл не загружен');
-  res.json({ url: `http://localhost:${PORT}/uploads/${req.file.filename}` });
-});
-
-// --- CARS API ---
-app.get('/api/v1/cars', (req, res) => res.json(readDB().cars));
-
-app.post('/api/v1/cars', authenticateToken, (req, res) => {
-  const db = readDB();
-  const newCar = { 
-    id: `car-${Date.now()}`, 
-    ...req.body, 
-    userId: req.user.id // Привязываем машину к создателю
-  };
-  db.cars.push(newCar);
-  writeDB(db);
-  res.status(201).json(newCar);
-});
-
-// --- CHATS API ---
-app.post('/api/v1/messages/send', authenticateToken, (req, res) => {
-  const db = readDB();
-  const { chatId, text } = req.body;
-  let chat = db.chats.find(c => c.id === chatId);
-  
-  if (!chat) {
-    chat = { id: chatId, history: [] };
-    db.chats.push(chat);
+app.get('/api/v1/cars', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM cars');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  
-  chat.history.push({ 
-    senderId: req.user.id, 
-    text, 
-    time: new Date().toISOString() 
-  });
-  
-  writeDB(db);
-  res.json({ success: true, chat });
 });
 
-app.listen(PORT, () => {
-  console.log(`\x1b[35m%s\x1b[0m`, `=========================================`);
-  console.log(`\x1b[35m%s\x1b[0m`, `LSAuto ULTIMATE BACKEND IS LIVE!`);
-  console.log(`\x1b[35m%s\x1b[0m`, `Security: Bcrypt Hashing Active`);
-  console.log(`\x1b[35m%s\x1b[0m`, `Storage: File System (database.json)`);
-  console.log(`\x1b[35m%s\x1b[0m`, `URL: http://localhost:${PORT}`);
-  console.log(`\x1b[35m%s\x1b[0m`, `=========================================`);
+// Запуск
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n=========================================`);
+  console.log(`СЕРВЕР ЛС-АВТО ЗАПУЩЕН`);
+  console.log(`Адрес: http://127.0.0.1:${PORT}`);
+  console.log(`=========================================\n`);
 });

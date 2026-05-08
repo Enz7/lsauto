@@ -193,6 +193,15 @@ export const Catalog = () => {
           <FilterSelect label="Коробка передач" options={transmissions} value={transmission} onChange={setTransmission} />
           <FilterSelect label="Тип топлива" options={fuels} value={fuel} onChange={setFuel} />
           
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-gray-500 uppercase">Уровень продавца</label>
+            <select className="w-full bg-dark-input border border-white/10 rounded-xl py-2.5 px-4 text-sm outline-none focus:ring-1 focus:ring-primary">
+              <option>Любой</option>
+              <option>Platinum & Diamond</option>
+              <option>Только проверенные</option>
+            </select>
+          </div>
+
           <button className="w-full bg-primary text-black font-bold py-3 rounded-xl transition-all hover:bg-primary-hover mt-4">
             Показать авто
           </button>

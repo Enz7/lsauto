@@ -111,15 +111,15 @@ export const SupplierFeed = () => {
               <div className="p-6 flex items-center justify-between border-b border-white/5">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center text-primary font-bold">
-                    {post.supplier[0]}
+                    {post.supplierName[0]}
                   </div>
                   <div>
-                    <h4 className="font-bold text-sm">{post.supplier}</h4>
+                    <h4 className="font-bold text-sm">{post.supplierName}</h4>
                     <div className="text-[10px] text-gray-500 font-bold uppercase">{post.date}</div>
                   </div>
                 </div>
                 <button 
-                  onClick={() => { setActiveChatId('s1'); notify('Переходим в чат...', 'info'); }}
+                  onClick={() => { setActiveChatId(post.supplierId); notify('Переходим в чат...', 'info'); }}
                   className="bg-white/5 hover:bg-primary hover:text-black p-2 rounded-xl transition-all"
                 >
                   <MessageCircle size={20} />

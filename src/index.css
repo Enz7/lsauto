@@ -1,0 +1,47 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --color-primary: #FACC15;
+  --color-primary-hover: #EAB308;
+  --color-dark-bg: #000000;
+  --color-dark-card: #111111;
+  --color-dark-input: #1A1A1A;
+}
+
+@layer base {
+  body {
+    @apply bg-dark-bg text-white antialiased;
+  }
+}
+
+.yellow-glow {
+  box-shadow: 0 0 15px rgba(250, 204, 21, 0.2);
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-yellow-600;
+}
+
+/* Leaflet dark popup */
+.leaflet-popup-content-wrapper {
+  background: #111 !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 16px !important;
+  color: #fff !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.8) !important;
+}
+.leaflet-popup-tip {
+  background: #111 !important;
+}
+.leaflet-popup-close-button {
+  color: #888 !important;
+}
+.leaflet-popup-close-button:hover {
+  color: #fff !important;
+}
+
+@keyframes ping {
+  75%, 100% { transform: scale(2); opacity: 0; }
+}
+

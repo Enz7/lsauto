@@ -33,14 +33,8 @@ const LoginForm = () => {
       login(data.user.role, data.user);
       navigate(data.user.role === 'Поставщик' ? '/dashboard' : data.user.role === 'Посредник' ? '/broker' : '/');
     } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.response?.data?.message || 'Ошибка входа';
-      if (!err?.response) {
-        login('Клиент', { name: 'Пользователь', email: formData.email });
-        notify('Вход выполнен (демо-режим)', 'info');
-        navigate('/');
-      } else {
-        setError(msg);
-      }
+      const msg = err?.response?.data?.error || err?.response?.data?.message || 'Ошибка входа. Проверьте подключение к серверу.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -153,15 +147,8 @@ const RegisterForm = () => {
       notify('Аккаунт создан!', 'success');
       navigate(role === 'Поставщик' ? '/dashboard' : role === 'Посредник' ? '/broker' : '/');
     } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.response?.data?.message;
-      if (!err?.response) {
-        // Бэкенд недоступен — локальная регистрация для демо
-        login(role, formData);
-        notify('Аккаунт создан (демо-режим)', 'info');
-        navigate(role === 'Поставщик' ? '/dashboard' : role === 'Посредник' ? '/broker' : '/');
-      } else {
-        setError(msg || 'Ошибка регистрации');
-      }
+      const msg = err?.response?.data?.error || err?.response?.data?.message || 'Ошибка регистрации. Проверьте подключение к серверу.';
+      setError(msg);
     } finally {
       setLoading(false);
     }

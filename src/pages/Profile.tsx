@@ -5,7 +5,7 @@ import { Navigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 
 export const Profile = () => {
-  const { isLoggedIn, userRole, logout, favorites, compareList, isVerified, deals, addedCars } = useApp();
+  const { isLoggedIn, userRole, logout, favorites, compareList, isVerified, deals, addedCars, currentUser } = useApp();
 
   if (!isLoggedIn) return <Navigate to="/login" replace />;
 
@@ -18,7 +18,7 @@ export const Profile = () => {
     return { name: 'Bronze', color: 'text-orange-400', bg: 'bg-orange-400/10' };
   };
 
-  const rank = getRank(isSupplier ? 5 : 1);
+  const rank = getRank(currentUser?.level ?? (isSupplier ? 5 : 1));
 
   return (
     <>
@@ -44,7 +44,7 @@ export const Profile = () => {
                 )}
               </div>
               <div className="pb-2">
-                <h1 className="text-3xl font-black">{isSupplier ? 'China Auto Export' : 'Александр'}</h1>
+                <h1 className="text-3xl font-black">{currentUser?.name || (isSupplier ? 'Поставщик' : 'Пользователь')}</h1>
                 <div className="flex items-center gap-3 mt-1">
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${rank.bg} ${rank.color}`}>
                     {rank.name} Уровень
@@ -69,9 +69,9 @@ export const Profile = () => {
               <div className="flex justify-between items-end">
                 <div>
                   <div className="text-xs text-gray-500 uppercase font-bold mb-1">Ваш прогресс</div>
-                  <div className="text-xl font-bold">Уровень 5: <span className="text-indigo-400 italic">Platinum</span></div>
+                  <div className="text-xl font-bold">Уровень {currentUser?.level ?? 1}: <span className={rank.color + ' italic'}>{rank.name}</span></div>
                 </div>
-                <div className="text-right"><div className="font-bold text-primary">450 / 500</div></div>
+                <div className="text-right"><div className="font-bold text-primary">{currentUser?.level ?? 1} / 8</div></div>
               </div>
               <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
                 <div className="h-full bg-primary w-[90%] shadow-[0_0_10px_rgba(250,204,21,0.5)]" />

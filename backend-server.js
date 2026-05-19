@@ -235,6 +235,43 @@ const initDB = async () => {
         `,
       },
       {
+        name: '004_supplier_profile_and_tables',
+        sql: `
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(255);
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS description TEXT;
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS experience VARCHAR(50) DEFAULT '0 лет';
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT;
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS rating DECIMAL(3,1) DEFAULT 5.0;
+
+          CREATE TABLE IF NOT EXISTS trade_in_requests (
+            id SERIAL PRIMARY KEY,
+            user_id INT REFERENCES users(id) ON DELETE SET NULL,
+            brand VARCHAR(100) NOT NULL,
+            model VARCHAR(100) NOT NULL,
+            year INT,
+            mileage INT DEFAULT 0,
+            condition VARCHAR(50) DEFAULT 'Хорошее',
+            owners INT DEFAULT 1,
+            estimate_min DECIMAL(15,2),
+            estimate_max DECIMAL(15,2),
+            status VARCHAR(50) DEFAULT 'new',
+            created_at TIMESTAMP DEFAULT NOW()
+          );
+
+          CREATE TABLE IF NOT EXISTS news (
+            id SERIAL PRIMARY KEY,
+            category VARCHAR(50) DEFAULT 'market',
+            title VARCHAR(500) NOT NULL,
+            excerpt TEXT,
+            content TEXT,
+            image_url TEXT,
+            views INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
+          );
+        `,
+      },
+      {
         name: '003_supplier_level_trigger',
         sql: `
           CREATE OR REPLACE FUNCTION update_supplier_level()
@@ -961,6 +998,20 @@ app.post('/api/v1/posts', authenticateToken, async (req, res) => {
   }
 });
 
+app.delete('/api/v1/posts/:id', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM posts WHERE id = $1 AND supplier_id = $2 RETURNING id',
+      [req.params.id, req.user.id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Пост не найден или нет доступа' });
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err: err.message }, 'post delete error');
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
 app.post('/api/v1/posts/:id/like', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
@@ -1077,13 +1128,48 @@ app.get('/api/v1/suppliers', async (req, res) => {
     const countRes = await pool.query(`SELECT COUNT(*) FROM users WHERE role = 'Поставщик'`);
     const total = parseInt(countRes.rows[0].count);
     const result = await pool.query(
-      `SELECT id, name, email, level, is_verified, created_at FROM users
-       WHERE role = 'Поставщик' ORDER BY level DESC, created_at DESC LIMIT $1 OFFSET $2`,
+      `SELECT id, name, email, level, is_verified, city, description, experience, phone, photo_url, rating, created_at
+       FROM users WHERE role = 'Поставщик' ORDER BY level DESC, created_at DESC LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
     res.json({ data: result.rows, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   } catch (err) {
     logger.error({ err: err.message }, 'suppliers get error');
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+app.get('/api/v1/suppliers/city/:city', async (req, res) => {
+  const { page, limit, offset } = parsePagination(req.query);
+  const city = clean(req.params.city);
+  try {
+    const countRes = await pool.query(
+      `SELECT COUNT(*) FROM users WHERE role = 'Поставщик' AND city ILIKE $1`, [`%${city}%`]
+    );
+    const total = parseInt(countRes.rows[0].count);
+    const result = await pool.query(
+      `SELECT id, name, email, level, is_verified, city, description, experience, phone, photo_url, rating, created_at
+       FROM users WHERE role = 'Поставщик' AND city ILIKE $1 ORDER BY level DESC LIMIT $2 OFFSET $3`,
+      [`%${city}%`, limit, offset]
+    );
+    res.json({ data: result.rows, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  } catch (err) {
+    logger.error({ err: err.message }, 'suppliers by city error');
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+app.get('/api/v1/suppliers/:id', async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT id, name, email, level, is_verified, city, description, experience, phone, photo_url, rating, created_at
+       FROM users WHERE id = $1 AND role = 'Поставщик'`,
+      [req.params.id]
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: 'Поставщик не найден' });
+    res.json(r.rows[0]);
+  } catch (err) {
+    logger.error({ err: err.message }, 'supplier get by id error');
     res.status(500).json({ error: 'Ошибка сервера' });
   }
 });
@@ -1096,6 +1182,94 @@ app.patch('/api/v1/suppliers/:id/verify', authenticateToken, async (req, res) =>
     res.json({ success: true });
   } catch (err) {
     logger.error({ err: err.message }, 'verify error');
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// ─── PROFILE ───────────────────────────────────────────────────────────────
+
+app.put('/api/v1/profile', authenticateToken, async (req, res) => {
+  const name = clean(req.body.name?.trim());
+  const city = clean(req.body.city?.trim());
+  const description = clean(req.body.description?.trim());
+  const experience = clean(req.body.experience?.trim());
+  const phone = clean(req.body.phone?.trim());
+  const photo_url = req.body.photo_url || null;
+
+  if (!name) return res.status(400).json({ error: 'Имя обязательно' });
+  try {
+    const result = await pool.query(
+      `UPDATE users SET name=$1, city=$2, description=$3, experience=$4, phone=$5,
+       photo_url=COALESCE($6, photo_url) WHERE id=$7
+       RETURNING id, name, email, role, level, is_verified, city, description, experience, phone, photo_url, rating`,
+      [name, city || null, description || null, experience || null, phone || null, photo_url, req.user.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    logger.error({ err: err.message }, 'profile update error');
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// ─── TRADE-IN ──────────────────────────────────────────────────────────────
+
+app.post('/api/v1/trade-in', optionalAuth, async (req, res) => {
+  const brand = clean(req.body.brand);
+  const model = clean(req.body.model);
+  const { year, mileage, condition, owners, estimateMin, estimateMax } = req.body;
+
+  if (!brand || !model) return res.status(400).json({ error: 'Марка и модель обязательны' });
+  try {
+    const result = await pool.query(
+      `INSERT INTO trade_in_requests (user_id, brand, model, year, mileage, condition, owners, estimate_min, estimate_max)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [req.user?.id || null, brand, model, year || null, mileage || 0,
+       condition || 'Хорошее', owners || 1, estimateMin || null, estimateMax || null]
+    );
+    logger.info({ tradeInId: result.rows[0].id }, 'trade-in request created');
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    logger.error({ err: err.message }, 'trade-in post error');
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// ─── ADMIN STATS ───────────────────────────────────────────────────────────
+
+app.get('/api/v1/admin/stats', authenticateToken, async (req, res) => {
+  try {
+    const [usersRes, pendingCarsRes, dealsRes, chatRes, revenueRes] = await Promise.all([
+      pool.query(`SELECT COUNT(*) FROM users`),
+      pool.query(`SELECT COUNT(*) FROM cars WHERE status = 'pending'`),
+      pool.query(`SELECT COUNT(*) FROM deals`),
+      pool.query(`SELECT COUNT(DISTINCT room_id) FROM chat_messages`),
+      pool.query(`SELECT COALESCE(SUM(escrow_amount), 0) AS total FROM deals WHERE escrow_status = 'released'`),
+    ]);
+    res.json({
+      usersCount: parseInt(usersRes.rows[0].count),
+      pendingCars: parseInt(pendingCarsRes.rows[0].count),
+      dealsCount: parseInt(dealsRes.rows[0].count),
+      activeChats: parseInt(chatRes.rows[0].count),
+      revenue: parseFloat(revenueRes.rows[0].total),
+    });
+  } catch (err) {
+    logger.error({ err: err.message }, 'admin stats error');
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+app.get('/api/v1/admin/users', authenticateToken, async (req, res) => {
+  const { page, limit, offset } = parsePagination(req.query);
+  try {
+    const countRes = await pool.query('SELECT COUNT(*) FROM users');
+    const total = parseInt(countRes.rows[0].count);
+    const result = await pool.query(
+      `SELECT id, name, email, role, level, is_verified, city, created_at FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json({ data: result.rows, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  } catch (err) {
+    logger.error({ err: err.message }, 'admin users error');
     res.status(500).json({ error: 'Ошибка сервера' });
   }
 });

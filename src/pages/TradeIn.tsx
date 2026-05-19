@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { Car, ArrowRight, CheckCircle2, RefreshCw, ChevronDown } from 'lucide-react';
+import { tradeInService } from '../services/apiService';
 
 const BRANDS = ['Geely', 'BMW', 'Toyota', 'Hyundai', 'Kia', 'Mercedes-Benz', 'Audi', 'Volkswagen', 'Lada', 'Chevrolet', 'Ford', 'Nissan', 'Mazda', 'Mitsubishi', 'Lexus', 'Другое'];
 const CONDITIONS = ['Отличное', 'Хорошее', 'Среднее', 'Требует ремонта'];
@@ -48,8 +49,18 @@ export const TradeIn = () => {
     setEstimate({ min: Math.round(raw * 0.92 / 1000) * 1000, max: Math.round(raw * 1.08 / 1000) * 1000 });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    await tradeInService.create({
+      brand,
+      model,
+      year: Number(year) || undefined,
+      mileage: Number(mileage.replace(/\s/g, '')) || 0,
+      condition,
+      owners: Number(owners) || 1,
+      estimateMin: estimate?.min,
+      estimateMax: estimate?.max,
+    }).catch(() => {});
     setSubmitted(true);
   };
 

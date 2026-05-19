@@ -229,6 +229,9 @@ export const postService = {
     const response = await api.post(`/posts/${id}/like`);
     return response.data as { likes: number };
   },
+  delete: async (id: number) => {
+    await api.delete(`/posts/${id}`);
+  },
 };
 
 // ─── VLOG SERVICE ───────────────────────────────────────────────────────────
@@ -271,14 +274,72 @@ export const customsService = {
 
 // ─── SUPPLIER SERVICE ───────────────────────────────────────────────────────
 
+import type { Поставщик } from '../types';
+
+export const mapApiSupplier = (row: any): Поставщик => ({
+  id: String(row.id),
+  название: row.name ?? '',
+  город: row.city ?? '',
+  контакты: row.phone ?? '',
+  описание: row.description ?? '',
+  опыт: row.experience ?? '0 лет',
+  документыСтатус: row.is_verified ? 'проверен' : 'не проверен',
+  фотографии: row.photo_url
+    ? [row.photo_url]
+    : ['https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&q=80&w=800'],
+  рейтинг: Number(row.rating) || 5.0,
+});
+
 export const supplierService = {
-  getAll: async (params?: { page?: number; limit?: number }) => {
+  getAll: async (params?: { page?: number; limit?: number }): Promise<{ data: Поставщик[]; pagination: Pagination | null }> => {
     const response = await api.get('/suppliers', { params });
-    if (Array.isArray(response.data)) return { data: response.data, pagination: null };
-    return response.data as { data: any[]; pagination: Pagination };
+    const rows = Array.isArray(response.data) ? response.data : response.data.data;
+    const pagination = Array.isArray(response.data) ? null : response.data.pagination;
+    return { data: rows.map(mapApiSupplier), pagination };
+  },
+  getById: async (id: string): Promise<Поставщик> => {
+    const response = await api.get(`/suppliers/${id}`);
+    return mapApiSupplier(response.data);
+  },
+  getByCity: async (city: string, params?: { page?: number; limit?: number }): Promise<{ data: Поставщик[]; pagination: Pagination | null }> => {
+    const response = await api.get(`/suppliers/city/${encodeURIComponent(city)}`, { params });
+    const rows = Array.isArray(response.data) ? response.data : response.data.data;
+    const pagination = Array.isArray(response.data) ? null : response.data.pagination;
+    return { data: rows.map(mapApiSupplier), pagination };
   },
   verify: async (id: number, is_verified: boolean) => {
     await api.patch(`/suppliers/${id}/verify`, { is_verified });
+  },
+};
+
+// ─── PROFILE SERVICE ────────────────────────────────────────────────────────
+
+export const profileService = {
+  update: async (data: { name: string; email?: string; city?: string; description?: string; experience?: string; phone?: string; photo_url?: string }) => {
+    const response = await api.put('/profile', data);
+    return response.data;
+  },
+};
+
+// ─── TRADE-IN SERVICE ───────────────────────────────────────────────────────
+
+export const tradeInService = {
+  create: async (data: { brand: string; model: string; year?: number; mileage?: number; condition?: string; owners?: number; estimateMin?: number; estimateMax?: number }) => {
+    const response = await api.post('/trade-in', data);
+    return response.data;
+  },
+};
+
+// ─── ADMIN SERVICE ──────────────────────────────────────────────────────────
+
+export const adminService = {
+  getStats: async () => {
+    const response = await api.get('/admin/stats');
+    return response.data as { usersCount: number; pendingCars: number; dealsCount: number; activeChats: number; revenue: number };
+  },
+  getUsers: async (params?: { page?: number; limit?: number }) => {
+    const response = await api.get('/admin/users', { params });
+    return response.data as { data: any[]; pagination: Pagination };
   },
 };
 

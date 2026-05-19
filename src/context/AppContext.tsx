@@ -2,11 +2,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Автомобиль, Тренд } from '../types';
 import { МOCK_CARS } from '../data/mockData';
+import { carService, requestService, favoriteService, dealService, postService, authService } from '../services/apiService';
 
-const isDev = import.meta.env.DEV;
-import { carService, requestService, favoriteService, dealService, postService } from '../services/apiService';
+const isDev = (import.meta as any).env?.DEV ?? false;
 
-interface User { id: string; name: string; email: string; role: string; is_verified: boolean; level: number; }
+interface User { id: string; name: string; email: string; role: string; is_verified: boolean; level: number; city?: string; description?: string; phone?: string; }
 interface Deal { id: string; carName: string; status: 'выкуплено' | 'таможня' | 'в пути' | 'выдано'; date: string; }
 interface UserRequest { id: string; brand: string; model: string; budget: number; comment: string; date: string; status: string; }
 interface AppNotification { id: string; text: string; time: string; read: boolean; }
@@ -28,11 +28,13 @@ interface AppContextType {
   userRequests: UserRequest[];
   appNotifications: AppNotification[];
   systemUsers: User[];
+  currentUser: User | null;
   isVerified: boolean;
   isLoggedIn: boolean;
   userRole: string | null;
   activeChatId: string | null;
   setAddedCars: React.Dispatch<React.SetStateAction<Автомобиль[]>>;
+  setCurrentUser: (user: User | null) => void;
   addCar: (car: Partial<Автомобиль>) => Promise<void>;
   approveCar: (id: string) => void;
   rejectCar: (id: string) => void;
@@ -79,17 +81,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [userRequests, setUserRequests] = useState<UserRequest[]>(() => safeGet('lsauto_requests'));
   const [appNotifications, setAppNotifications] = useState<AppNotification[]>(() => safeGet('lsauto_notifs'));
-  const [posts, setPosts] = useState<Post[]>(() => safeGet('lsauto_posts', JSON.stringify([
-    { id: 1, supplierId: 's1', supplierName: 'China Auto Export', type: 'pickup', title: 'Выдача Zeekr 001', text: 'Доставили за 18 дней в Казань.', image: 'https://images.unsplash.com/photo-1617788138017-80ad40651399?auto=format&fit=crop&q=80&w=800', likes: 42, comments: 5, date: '2 часа назад' },
-  ])));
+  const [posts, setPosts] = useState<Post[]>(() => safeGet('lsauto_posts', '[]'));
   const [reviews, setReviews] = useState<Review[]>(() => safeGet('lsauto_reviews'));
-  const [deals, setDeals] = useState<Deal[]>(() => safeGet('lsauto_deals', JSON.stringify([
-    { id: 'd1', carName: 'BMW X5 M-Pack', status: 'таможня', date: '12.05.2024' }
-  ])));
-  const [systemUsers, setSystemUsers] = useState<User[]>(() => safeGet('lsauto_users_list', JSON.stringify([
-    { id: 'u1', name: 'Александр', email: 'alex@mail.ru', role: 'Клиент', is_verified: false, level: 1 },
-    { id: 'u2', name: 'China Export', email: 'china@auto.pro', role: 'Поставщик', is_verified: true, level: 5 },
-  ])));
+  const [deals, setDeals] = useState<Deal[]>(() => safeGet('lsauto_deals', '[]'));
+  const [systemUsers, setSystemUsers] = useState<User[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      const stored = localStorage.getItem('lsauto_current_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch { return null; }
+  });
   const [trends, setTrends] = useState<Тренд[]>([
     { марка: 'Geely', модель: 'Monjaro', количествоЗапросов: 452, динамика: 'рост' },
     { марка: 'Zeekr', модель: '001', количествоЗапросов: 385, динамика: 'рост' },
@@ -98,7 +99,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     { id: 's1', name: 'China Auto Export', lastMsg: '', time: '', online: true, history: [] },
   ]);
 
-  // Сохраняем в localStorage как резервную копию
   useEffect(() => {
     localStorage.setItem('lsauto_favs', JSON.stringify(favorites));
     localStorage.setItem('lsauto_compare', JSON.stringify(compareList));
@@ -107,14 +107,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('lsauto_notifs', JSON.stringify(appNotifications));
     localStorage.setItem('lsauto_posts', JSON.stringify(posts));
     localStorage.setItem('lsauto_reviews', JSON.stringify(reviews));
-    localStorage.setItem('lsauto_users_list', JSON.stringify(systemUsers));
     localStorage.setItem('lsauto_deals', JSON.stringify(deals));
     localStorage.setItem('lsauto_verified', String(isVerified));
-  }, [favorites, compareList, addedCars, userRequests, appNotifications, posts, reviews, systemUsers, deals, isVerified]);
+    if (currentUser) localStorage.setItem('lsauto_current_user', JSON.stringify(currentUser));
+  }, [favorites, compareList, addedCars, userRequests, appNotifications, posts, reviews, deals, isVerified, currentUser]);
 
-  // Загружаем данные из API при входе
   useEffect(() => {
     if (!isLoggedIn) return;
+
+    authService.me()
+      .then(user => setCurrentUser({ id: String(user.id), name: user.name, email: user.email, role: user.role, is_verified: user.is_verified, level: user.level, city: user.city, description: user.description, phone: user.phone }))
+      .catch(() => {});
 
     carService.getAll({ limit: 100 })
       .then(res => { if (res.data.length > 0) setAddedCars(res.data); })
@@ -124,15 +127,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .then(res => {
         const reqs = Array.isArray(res) ? res : res.data;
         const mapped = reqs.map((r: any) => ({
-          id: String(r.id),
-          brand: r.brand,
-          model: r.model,
-          budget: Number(r.budget),
-          comment: r.comment ?? '',
+          id: String(r.id), brand: r.brand, model: r.model,
+          budget: Number(r.budget), comment: r.comment ?? '',
           date: new Date(r.created_at).toLocaleDateString('ru'),
-          status: r.status,
-          year: r.year_range,
-          city: r.city,
+          status: r.status, year: r.year_range, city: r.city,
         }));
         setUserRequests(mapped);
       })
@@ -146,8 +144,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .then(res => {
         const dbDeals = Array.isArray(res) ? res : res.data;
         const mapped = dbDeals.map((d: any) => ({
-          id: String(d.id),
-          carName: d.car_name,
+          id: String(d.id), carName: d.car_name,
           status: d.status as Deal['status'],
           date: new Date(d.created_at).toLocaleDateString('ru'),
         }));
@@ -159,16 +156,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .then(res => {
         const dbPosts = Array.isArray(res) ? res : res.data;
         const mapped = dbPosts.map((p: any) => ({
-          id: p.id,
-          supplierId: String(p.supplier_id),
-          supplierName: p.supplier_name,
-          type: p.type,
-          title: p.title,
-          text: p.text,
-          image: p.image ?? '',
-          likes: p.likes,
-          comments: 0,
-          date: new Date(p.created_at).toLocaleDateString('ru'),
+          id: p.id, supplierId: String(p.supplier_id), supplierName: p.supplier_name,
+          type: p.type, title: p.title, text: p.text, image: p.image ?? '',
+          likes: p.likes, comments: 0, date: new Date(p.created_at).toLocaleDateString('ru'),
         }));
         if (mapped.length > 0) setPosts(mapped);
       })
@@ -178,7 +168,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const notify = (message: string, type: 'success' | 'info' = 'success') => {
     const id = Date.now().toString();
     setNotifications(prev => [...prev, { id, message, type }]);
-    setAppNotifications(prev => [{ id: id.toString(), text: message, time: 'Только что', read: false }, ...prev]);
+    setAppNotifications(prev => [{ id, text: message, time: 'Только что', read: false }, ...prev]);
     setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 3000);
   };
 
@@ -227,6 +217,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deletePost = (id: number) => {
     setPosts(prev => prev.filter(p => p.id !== id));
+    postService.delete(id).catch(() => {});
   };
 
   const updateCar = (id: string, data: Partial<Автомобиль>) => {
@@ -236,13 +227,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addPost = (postData: Partial<Post>) => {
     const newPost = { ...postData, id: Date.now(), likes: 0, comments: 0, date: 'Только что' } as Post;
     setPosts(prev => [newPost, ...prev]);
-    postService.create({
-      supplierName: postData.supplierName,
-      type: postData.type,
-      title: postData.title!,
-      text: postData.text!,
-      image: postData.image,
-    }).catch(() => {});
+    postService.create({ supplierName: postData.supplierName, type: postData.type, title: postData.title!, text: postData.text!, image: postData.image }).catch(() => {});
   };
 
   const addReview = (rev: Partial<Review>) => {
@@ -256,7 +241,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUserRequests(prev => [newReq, ...prev]);
     setTrends(prev => {
       const exists = prev.find(t => t.марка === data.brand && t.модель === data.model);
-      if (exists) return prev.map(t => t.марка === data.brand && t.модель === data.model ? {...t, количествоЗапросов: t.количествоЗапросов + 1} : t);
+      if (exists) return prev.map(t => t.марка === data.brand && t.модель === data.model ? { ...t, количествоЗапросов: t.количествоЗапросов + 1 } : t);
       return [...prev, { марка: data.brand, модель: data.model, количествоЗапросов: 1, динамика: 'рост' }];
     });
     requestService.create(data).catch(() => {});
@@ -266,7 +251,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const sendMessage = (chatId: string, text: string) => {
     setChats(prev => prev.map(c => {
       if (c.id === chatId) {
-        return { ...c, lastMsg: text, time: 'Только что', history: [...c.history, { sender: 'Вы', text, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), isOwn: true }] };
+        return { ...c, lastMsg: text, time: 'Только что', history: [...c.history, { sender: 'Вы', text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), isOwn: true }] };
       }
       return c;
     }));
@@ -277,15 +262,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUserRole(role);
     localStorage.setItem('lsauto_auth', 'true');
     localStorage.setItem('lsauto_role', role);
-    if (data?.name) localStorage.setItem('lsauto_user_name', data.name);
+    if (data) {
+      const user: User = { id: String(data.id ?? ''), name: data.name ?? '', email: data.email ?? '', role, is_verified: data.is_verified ?? false, level: data.level ?? 1 };
+      setCurrentUser(user);
+    }
     notify(`Добро пожаловать!`, 'success');
   };
 
   const logout = () => {
     localStorage.removeItem('lsauto_auth');
     localStorage.removeItem('lsauto_role');
+    localStorage.removeItem('lsauto_current_user');
     setIsLoggedIn(false);
     setUserRole(null);
+    setCurrentUser(null);
     window.location.href = '/';
   };
 
@@ -294,27 +284,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     : [...(addedCars || [])];
 
   return (
-    <AppContext.Provider value={{ 
-      favorites, compareList, addedCars, allCars, trends, chats, posts, reviews, deals, userRequests, appNotifications, systemUsers, isVerified, isLoggedIn, userRole, activeChatId,
-      setAddedCars, addCar, updateCar, approveCar, rejectCar, deleteRequest, createDeal, verifyUser, addPost, updatePost, deletePost, likePost, addReview,
-      setVerified: (v) => setIsVerified(v), setActiveChatId, 
+    <AppContext.Provider value={{
+      favorites, compareList, addedCars, allCars, trends, chats, posts, reviews, deals, userRequests, appNotifications, systemUsers, currentUser, isVerified, isLoggedIn, userRole, activeChatId,
+      setAddedCars, setCurrentUser, addCar, updateCar, approveCar, rejectCar, deleteRequest, createDeal, verifyUser, addPost, updatePost, deletePost, likePost, addReview,
+      setVerified: (v) => setIsVerified(v), setActiveChatId,
       toggleFavorite: (id) => {
-        setFavorites(p => {
-          if (p.includes(id)) {
-            favoriteService.remove(id).catch(() => {});
-            return p.filter(f => f !== id);
-          } else {
-            favoriteService.add(id).catch(() => {});
-            return [...p, id];
-          }
-        });
+        const prev = favorites;
+        const isAdding = !prev.includes(id);
+        setFavorites(isAdding ? [...prev, id] : prev.filter(f => f !== id));
+        const apiCall = isAdding ? favoriteService.add(id) : favoriteService.remove(id);
+        apiCall.catch(() => setFavorites(prev));
       },
       toggleCompare: (id) => setCompareList(p => p.includes(id) ? p.filter(f => f !== id) : [...p, id]),
       clearFavorites: () => setFavorites([]),
       clearCompare: () => setCompareList([]),
       submitRequest, sendMessage,
       markNotificationsRead: () => setAppNotifications(prev => (prev || []).map(n => ({ ...n, read: true }))),
-      login, logout, notify 
+      login, logout, notify
     }}>
       {children}
       <div className="fixed bottom-24 right-8 z-[200] space-y-3 pointer-events-none text-right">

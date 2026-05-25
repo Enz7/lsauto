@@ -1,6 +1,6 @@
 
 import { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { AppProvider } from './context/AppContext';
 import { HelmetProvider } from 'react-helmet-async';
@@ -27,6 +27,7 @@ const NewsHub = lazy(() => import('./pages/NewsHub').then(m => ({ default: m.New
 const TradeIn = lazy(() => import('./pages/TradeIn').then(m => ({ default: m.TradeIn })));
 const Promotions = lazy(() => import('./pages/Promotions').then(m => ({ default: m.Promotions })));
 const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[400px]" aria-label="Загрузка страницы">
@@ -57,8 +58,8 @@ function App() {
                   <Route path="/suppliers" element={<Suppliers />} />
                   <Route path="/suppliers/:id" element={<SupplierDetail />} />
                   <Route path="/city/:city" element={<CityDetail />} />
-                  <Route path="/feed" element={<SupplierFeed />} />
-                  <Route path="/news" element={<NewsHub />} />
+                  <Route path="/feed" element={<Navigate to="/" replace />} />
+                  <Route path="/news" element={<Navigate to="/" replace />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/messages" element={<Messages />} />
                   <Route path="/favorites" element={<Favorites />} />
@@ -69,9 +70,10 @@ function App() {
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/about" element={<About />} />
                   <Route path="/trade-in" element={<TradeIn />} />
-                  <Route path="/promotions" element={<Promotions />} />
+                  <Route path="/promotions" element={<Navigate to="/" replace />} />
                   <Route path="/register" element={<Registration />} />
                   <Route path="/login" element={<Registration />} />
+                  <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>

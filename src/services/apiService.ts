@@ -1,7 +1,6 @@
-
 import axios from 'axios';
 import { io, Socket } from 'socket.io-client';
-import type { Автомобиль } from '../types';
+import type { Car, Supplier, Pagination } from '@/types';
 
 const getBaseURL = (): string => {
   if (typeof window !== 'undefined') {
@@ -27,17 +26,14 @@ export const api = axios.create({
   withCredentials: true,
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('lsauto_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('lsauto_token');
+      localStorage.removeItem('lsauto_auth');
+      localStorage.removeItem('lsauto_role');
+      localStorage.removeItem('lsauto_current_user');
+      window.location.href = '/';
     }
     return Promise.reject(error);
   }
@@ -47,12 +43,9 @@ api.interceptors.response.use(
 
 let _socket: Socket | null = null;
 
-export const getSocket = (): Socket | null => {
-  const token = localStorage.getItem('lsauto_token');
-  if (!token) return null;
+export const getSocket = (): Socket => {
   if (_socket?.connected) return _socket;
   _socket = io(getSocketURL(), {
-    auth: { token },
     withCredentials: true,
     transports: ['websocket', 'polling'],
     reconnection: true,
@@ -67,25 +60,40 @@ export const disconnectSocket = () => {
 
 // ─── MAPPERS ────────────────────────────────────────────────────────────────
 
-export const mapApiCar = (row: any): Автомобиль => ({
+export const mapApiCar = (row: any): Car => ({
   id: String(row.id),
-  марка: row.brand,
-  модель: row.model,
-  год: row.year,
-  цена: Number(row.price),
-  страна: (row.origin as any) ?? 'Китай',
-  коробка: row.transmission ?? 'Автомат',
-  топливо: row.fuel ?? 'Бензин',
-  пробег: row.mileage ?? 0,
-  описание: row.description ?? '',
-  город: row.city ?? '',
-  поставщикId: String(row.user_id ?? 's1'),
-  изображения: Array.isArray(row.images) ? row.images : (row.images ? JSON.parse(row.images) : []),
-  тренд: false,
-  теги: [],
+  brand: row.brand ?? '',
+  model: row.model ?? '',
+  year: row.year ?? 0,
+  price: Number(row.price),
+  origin: (row.origin as Car['origin']) ?? 'Китай',
+  transmission: row.transmission ?? 'Автомат',
+  fuel: row.fuel ?? 'Бензин',
+  mileage: row.mileage ?? 0,
+  description: row.description ?? '',
+  city: row.city ?? '',
+  supplierId: String(row.user_id ?? 's1'),
+  images: Array.isArray(row.images) ? row.images : (row.images ? JSON.parse(row.images) : []),
+  isTrending: false,
+  tags: [],
+  status: (row.status as Car['status']) ?? 'pending',
 });
 
-interface Pagination { page: number; limit: number; total: number; totalPages: number; }
+export const mapApiSupplier = (row: any): Supplier => ({
+  id: String(row.id),
+  name: row.name ?? '',
+  city: row.city ?? '',
+  contacts: row.phone ?? '',
+  description: row.description ?? '',
+  experience: row.experience ?? '0 лет',
+  docsStatus: row.is_verified ? 'проверен' : 'не проверен',
+  photos: row.photo_url
+    ? [row.photo_url]
+    : ['https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&q=80&w=800'],
+  rating: Number(row.rating) || 5.0,
+  level: Number(row.level) || 1,
+  isVerified: Boolean(row.is_verified),
+});
 
 // ─── CAR SERVICE ────────────────────────────────────────────────────────────
 
@@ -94,7 +102,7 @@ export const carService = {
     page?: number; limit?: number; brand?: string; city?: string;
     minPrice?: number; maxPrice?: number; minYear?: number; maxYear?: number;
     transmission?: string; fuel?: string; origin?: string; search?: string; sort?: string;
-  }): Promise<{ data: Автомобиль[]; pagination: Pagination }> => {
+  }): Promise<{ data: Car[]; pagination: Pagination }> => {
     const response = await api.get('/cars', { params });
     if (Array.isArray(response.data)) {
       return { data: response.data.map(mapApiCar), pagination: { page: 1, limit: response.data.length, total: response.data.length, totalPages: 1 } };
@@ -102,12 +110,12 @@ export const carService = {
     return { data: response.data.data.map(mapApiCar), pagination: response.data.pagination };
   },
 
-  create: async (car: Partial<Автомобиль>) => {
+  create: async (car: Partial<Car>) => {
     const payload = {
-      brand: car.марка, model: car.модель, year: car.год, price: car.цена,
-      origin: car.страна, transmission: car.коробка, fuel: car.топливо,
-      mileage: car.пробег, city: car.город, description: car.описание,
-      images: car.изображения ?? [],
+      brand: car.brand, model: car.model, year: car.year, price: car.price,
+      origin: car.origin, transmission: car.transmission, fuel: car.fuel,
+      mileage: car.mileage, city: car.city, description: car.description,
+      images: car.images ?? [],
     };
     const response = await api.post('/cars', payload);
     return mapApiCar(response.data);
@@ -138,20 +146,21 @@ export const carService = {
 export const authService = {
   register: async (userData: { name: string; email: string; password: string; role: string }) => {
     const response = await api.post('/auth/register', userData);
-    if (response.data.token) localStorage.setItem('lsauto_token', response.data.token);
-    return response.data as { success: boolean; token: string; user: { id: number; email: string; role: string; name: string; level: number; is_verified: boolean } };
+    return response.data as { success: boolean; user: { id: number; email: string; role: string; name: string; level: number; is_verified: boolean } };
   },
 
   login: async (credentials: { email: string; password: string }) => {
     const response = await api.post('/auth/login', credentials);
-    if (response.data.token) localStorage.setItem('lsauto_token', response.data.token);
-    return response.data as { success: boolean; token: string; user: { id: number; email: string; role: string; name: string; level: number; is_verified: boolean } };
+    return response.data as { success: boolean; user: { id: number; email: string; role: string; name: string; level: number; is_verified: boolean } };
   },
 
   logout: async () => {
     await api.post('/auth/logout').catch(() => {});
-    localStorage.removeItem('lsauto_token');
     disconnectSocket();
+  },
+
+  refresh: async () => {
+    await axios.post('/api/v1/auth/refresh', {}, { withCredentials: true });
   },
 
   me: async () => {
@@ -274,34 +283,18 @@ export const customsService = {
 
 // ─── SUPPLIER SERVICE ───────────────────────────────────────────────────────
 
-import type { Поставщик } from '../types';
-
-export const mapApiSupplier = (row: any): Поставщик => ({
-  id: String(row.id),
-  название: row.name ?? '',
-  город: row.city ?? '',
-  контакты: row.phone ?? '',
-  описание: row.description ?? '',
-  опыт: row.experience ?? '0 лет',
-  документыСтатус: row.is_verified ? 'проверен' : 'не проверен',
-  фотографии: row.photo_url
-    ? [row.photo_url]
-    : ['https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&q=80&w=800'],
-  рейтинг: Number(row.rating) || 5.0,
-});
-
 export const supplierService = {
-  getAll: async (params?: { page?: number; limit?: number }): Promise<{ data: Поставщик[]; pagination: Pagination | null }> => {
+  getAll: async (params?: { page?: number; limit?: number }): Promise<{ data: Supplier[]; pagination: Pagination | null }> => {
     const response = await api.get('/suppliers', { params });
     const rows = Array.isArray(response.data) ? response.data : response.data.data;
     const pagination = Array.isArray(response.data) ? null : response.data.pagination;
     return { data: rows.map(mapApiSupplier), pagination };
   },
-  getById: async (id: string): Promise<Поставщик> => {
+  getById: async (id: string): Promise<Supplier> => {
     const response = await api.get(`/suppliers/${id}`);
     return mapApiSupplier(response.data);
   },
-  getByCity: async (city: string, params?: { page?: number; limit?: number }): Promise<{ data: Поставщик[]; pagination: Pagination | null }> => {
+  getByCity: async (city: string, params?: { page?: number; limit?: number }): Promise<{ data: Supplier[]; pagination: Pagination | null }> => {
     const response = await api.get(`/suppliers/city/${encodeURIComponent(city)}`, { params });
     const rows = Array.isArray(response.data) ? response.data : response.data.data;
     const pagination = Array.isArray(response.data) ? null : response.data.pagination;

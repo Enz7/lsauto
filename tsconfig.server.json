@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Node16",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": [
+    "src/config/**/*.ts",
+    "src/middleware/**/*.ts",
+    "src/routes/**/*.ts",
+    "src/db/**/*.ts",
+    "src/utils/clean.ts",
+    "src/utils/pagination.ts",
+    "src/services/email.ts",
+    "src/services/fraud.ts",
+    "src/services/socket.ts",
+    "src/server.ts"
+  ],
+  "exclude": [
+    "src/**/*.tsx",
+    "src/**/*.test.ts",
+    "src/__tests__/**",
+    "src/services/apiService.ts",
+    "src/types/**",
+    "src/context/**",
+    "src/pages/**",
+    "src/components/**",
+    "src/data/**",
+    "src/utils/schemas.ts",
+    "src/utils/cn.ts"
+  ]
+}

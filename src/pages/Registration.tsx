@@ -306,6 +306,20 @@ const RegisterForm = () => {
           )}
 
           <div className="pt-6">
+            <label className="flex items-start gap-3 text-sm text-gray-400 mb-6 cursor-pointer">
+              <input
+                type="checkbox"
+                required
+                className="mt-0.5 flex-shrink-0 accent-primary"
+              />
+              <span>
+                Я согласен с{' '}
+                <a href="/privacy" target="_blank" className="text-primary underline hover:text-primary-hover">
+                  политикой конфиденциальности
+                </a>{' '}
+                и даю согласие на обработку персональных данных
+              </span>
+            </label>
             <button
               type="submit"
               disabled={loading}

@@ -1,7 +1,6 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Filter, ChevronDown, SlidersHorizontal, MapPin, Gauge, Heart, Scale, X as CloseIcon } from 'lucide-react';
-import { МOCK_CARS } from '../data/mockData';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Helmet } from 'react-helmet-async';
@@ -43,7 +42,7 @@ const FilterSelect = ({ label, options, value, onChange }: any) => (
 
 export const Catalog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { toggleFavorite, favorites, toggleCompare, compareList, addedCars } = useApp();
+  const { toggleFavorite, favorites, toggleCompare, compareList, allCars } = useApp();
   const [origin, setOrigin] = useState(searchParams.get('origin') || '');
   const [brand, setBrand] = useState(searchParams.get('brand') || '');
   const [model, setModel] = useState(searchParams.get('model') || '');
@@ -91,28 +90,27 @@ export const Catalog = () => {
 
   useEffect(() => { syncURL(); }, [syncURL]);
 
-  const allAvailableCars = useMemo(() => [
-    ...addedCars.filter((c: any) => c.status === 'approved'), 
-    ...МOCK_CARS
-  ], [addedCars]);
-  
-  const brands = useMemo(() => Array.from(new Set(allAvailableCars.map(c => c.марка))).sort(), [allAvailableCars]);
+  const allAvailableCars = useMemo(() =>
+    allCars.filter(c => c.status === 'approved'),
+  [allCars]);
+
+  const brands = useMemo(() => Array.from(new Set(allAvailableCars.map(c => c.brand))).sort(), [allAvailableCars]);
   const models = useMemo(() => {
     if (!brand) return [];
-    return Array.from(new Set(allAvailableCars.filter(c => c.марка === brand).map(c => c.модель))).sort();
+    return Array.from(new Set(allAvailableCars.filter(c => c.brand === brand).map(c => c.model))).sort();
   }, [brand, allAvailableCars]);
   const generations = useMemo(() => {
     if (!brand || !model) return [];
     return Array.from(new Set(
-      allAvailableCars.filter(c => c.марка === brand && c.модель === model && c.поколение).map(c => c.поколение!)
+      allAvailableCars.filter(c => c.brand === brand && c.model === model && c.generation).map(c => c.generation!)
     ));
   }, [brand, model, allAvailableCars]);
 
   const bodies = useMemo(() =>
-    Array.from(new Set(allAvailableCars.filter(c => c.кузов).map(c => c.кузов!))).sort(),
+    Array.from(new Set(allAvailableCars.filter(c => c.bodyType).map(c => c.bodyType!))).sort(),
     [allAvailableCars]);
   const drives = useMemo(() =>
-    Array.from(new Set(allAvailableCars.filter(c => c.привод).map(c => c.привод!))).sort(),
+    Array.from(new Set(allAvailableCars.filter(c => c.driveType).map(c => c.driveType!))).sort(),
     [allAvailableCars]);
 
   const origins = ['Китай', 'Европа', 'Южная Корея'];
@@ -122,32 +120,32 @@ export const Catalog = () => {
   const filteredAndSortedCars = useMemo(() => {
     let result = allAvailableCars.filter(car => {
       const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = !searchTerm || 
-        car.марка.toLowerCase().includes(searchLower) || 
-        car.модель.toLowerCase().includes(searchLower) ||
-        car.город.toLowerCase().includes(searchLower);
-      
+      const matchesSearch = !searchTerm ||
+        car.brand.toLowerCase().includes(searchLower) ||
+        car.model.toLowerCase().includes(searchLower) ||
+        car.city.toLowerCase().includes(searchLower);
+
       return matchesSearch &&
-             (!origin || car.страна === origin) &&
-             (!brand || car.марка === brand) &&
-             (!model || car.модель === model) &&
-             (!generation || car.поколение === generation) &&
-             (!transmission || car.коробка === transmission) &&
-             (!fuel || car.топливо === fuel) &&
-             (!body || car.кузов === body) &&
-             (!drive || car.привод === drive) &&
-             (!engineVolume || car.объёмДвигателя === Number(engineVolume)) &&
-             (!powerRange.min || (car.мощность ?? 0) >= Number(powerRange.min)) &&
-             (!powerRange.max || (car.мощность ?? 0) <= Number(powerRange.max)) &&
-             (!priceRange.min || car.цена >= Number(priceRange.min)) &&
-             (!priceRange.max || car.цена <= Number(priceRange.max)) &&
-             (!yearRange.min || car.год >= Number(yearRange.min)) &&
-             (!yearRange.max || car.год <= Number(yearRange.max));
+             (!origin || car.origin === origin) &&
+             (!brand || car.brand === brand) &&
+             (!model || car.model === model) &&
+             (!generation || car.generation === generation) &&
+             (!transmission || car.transmission === transmission) &&
+             (!fuel || car.fuel === fuel) &&
+             (!body || car.bodyType === body) &&
+             (!drive || car.driveType === drive) &&
+             (!engineVolume || car.engineVolume === Number(engineVolume)) &&
+             (!powerRange.min || (car.power ?? 0) >= Number(powerRange.min)) &&
+             (!powerRange.max || (car.power ?? 0) <= Number(powerRange.max)) &&
+             (!priceRange.min || car.price >= Number(priceRange.min)) &&
+             (!priceRange.max || car.price <= Number(priceRange.max)) &&
+             (!yearRange.min || car.year >= Number(yearRange.min)) &&
+             (!yearRange.max || car.year <= Number(yearRange.max));
     });
 
-    if (sort === 'price-asc') result.sort((a, b) => a.цена - b.цена);
-    if (sort === 'price-desc') result.sort((a, b) => b.цена - a.цена);
-    if (sort === 'year') result.sort((a, b) => b.год - a.год);
+    if (sort === 'price-asc') result.sort((a, b) => a.price - b.price);
+    if (sort === 'price-desc') result.sort((a, b) => b.price - a.price);
+    if (sort === 'year') result.sort((a, b) => b.year - a.year);
 
     return result;
   }, [allAvailableCars, searchTerm, origin, brand, model, generation, transmission, fuel, body, drive, engineVolume, powerRange, priceRange, yearRange, sort]);
@@ -378,28 +376,28 @@ export const Catalog = () => {
                     className="bg-dark-card border border-white/5 rounded-2xl overflow-hidden hover:border-primary/40 transition-all flex flex-col h-full"
                   >
                     <div className="relative aspect-[16/9]">
-                      <img src={car.изображения?.[0] ?? 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=800'} alt={car.марка} className="w-full h-full object-cover" />
+                      <img src={car.images?.[0] ?? 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=800'} alt={car.brand} className="w-full h-full object-cover" />
                       <div className="absolute top-4 left-4">
-                        <SupplierBadge level={car.id.startsWith('car-') ? 1 : 5} />
+                        <SupplierBadge level={5} />
                       </div>
                     </div>
                     <div className="p-5 flex-grow">
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <h2 className="text-xl font-bold">{car.марка} {car.модель}</h2>
+                          <h2 className="text-xl font-bold">{car.brand} {car.model}</h2>
                           <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
-                            <span className="flex items-center gap-1"><MapPin size={12} /> {car.город}</span>
-                            <span className="flex items-center gap-1"><Gauge size={12} /> {car.пробег.toLocaleString()} км</span>
+                            <span className="flex items-center gap-1"><MapPin size={12} /> {car.city}</span>
+                            <span className="flex items-center gap-1"><Gauge size={12} /> {car.mileage.toLocaleString()} км</span>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-2xl font-bold text-primary leading-none">{car.цена.toLocaleString()} ₽</div>
+                          <div className="text-2xl font-bold text-primary leading-none">{car.price.toLocaleString()} ₽</div>
                         </div>
                       </div>
-                      <p className="text-sm text-gray-400 line-clamp-2 mb-4">{car.описание}</p>
+                      <p className="text-sm text-gray-400 line-clamp-2 mb-4">{car.description}</p>
                       <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-auto">
                         <div className="flex gap-2 text-[10px] uppercase font-bold text-gray-500">
-                          {car.страна} • {car.топливо}
+                          {car.origin} • {car.fuel}
                         </div>
                         <div className="text-xs text-primary font-bold">Подробнее</div>
                       </div>

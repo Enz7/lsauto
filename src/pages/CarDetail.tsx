@@ -1,7 +1,6 @@
 
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { MOCK_SUPPLIERS } from '../data/mockData';
 import { Helmet } from 'react-helmet-async';
 import { ChevronLeft, MapPin, ShieldCheck, MessageCircle, Info, TrendingUp, Gauge, Calendar, Car, Scale, Heart, X, CheckCircle2, ZoomIn } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -23,7 +22,6 @@ export const CarDetail = () => {
   const isFav = id ? favorites.includes(id) : false;
   const isCompare = id ? compareList.includes(id) : false;
   const car = allCars.find(c => c.id === id);
-  const supplier = MOCK_SUPPLIERS.find(s => s.id === car?.поставщикId);
 
   if (!car) return (
     <div className="text-center py-20 animate-in fade-in duration-500">
@@ -35,24 +33,23 @@ export const CarDetail = () => {
   );
 
   const handleWrite = () => {
-    if (car?.поставщикId) {
-      setActiveChatId(car.поставщикId);
+    if (car?.supplierId) {
+      setActiveChatId(car.supplierId);
       navigate('/messages');
     }
   };
 
-  // Use real images from car object if available
-  const images = car.изображения && car.изображения.length > 0 
-    ? car.изображения 
+  const images = car.images && car.images.length > 0
+    ? car.images
     : ['https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=800'];
 
-  const otherCityPrice = car.цена + 150000;
+  const otherCityPrice = car.price + 150000;
 
   return (
     <>
       <Helmet>
-        <title>{`${car.марка} ${car.модель} ${car.год} — LSAUTO`}</title>
-        <meta name="description" content={`${car.марка} ${car.модель} ${car.год} г., ${car.цена.toLocaleString('ru')} ₽. Доставка из ${car.страна}. ${car.описание?.slice(0, 100) || ''}`} />
+        <title>{`${car.brand} ${car.model} ${car.year} — LSAUTO`}</title>
+        <meta name="description" content={`${car.brand} ${car.model} ${car.year} г., ${car.price.toLocaleString('ru')} ₽. Доставка из ${car.origin}. ${car.description?.slice(0, 100) || ''}`} />
       </Helmet>
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex justify-between items-center">
@@ -83,7 +80,7 @@ export const CarDetail = () => {
               onClick={() => setIsZoomed(true)}
               className="aspect-video rounded-3xl overflow-hidden border border-white/10 bg-dark-card cursor-zoom-in group relative"
             >
-              <img src={images[activeImg]} alt={car.марка} className="w-full h-full object-cover animate-in fade-in zoom-in-95 duration-500 group-hover:scale-105 transition-transform" />
+              <img src={images[activeImg]} alt={car.brand} className="w-full h-full object-cover animate-in fade-in zoom-in-95 duration-500 group-hover:scale-105 transition-transform" />
               <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                  <ZoomIn size={48} className="text-white drop-shadow-2xl" />
               </div>
@@ -112,11 +109,11 @@ export const CarDetail = () => {
           <div className="bg-dark-card p-5 md:p-8 rounded-3xl border border-white/5 space-y-6">
             <div className="flex justify-between items-start">
               <div>
-                <h1 className="text-4xl font-bold">{car.марка} {car.модель}</h1>
-                <p className="text-gray-400 mt-2">{car.год} год • {car.коробка} • {car.топливо}</p>
+                <h1 className="text-4xl font-bold">{car.brand} {car.model}</h1>
+                <p className="text-gray-400 mt-2">{car.year} год • {car.transmission} • {car.fuel}</p>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-primary">{car.цена.toLocaleString()} ₽</div>
+                <div className="text-3xl font-bold text-primary">{car.price.toLocaleString()} ₽</div>
                 <div className="text-sm text-gray-500">Цена с учетом доставки</div>
               </div>
             </div>
@@ -130,7 +127,7 @@ export const CarDetail = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-4 bg-primary/10 border border-primary/30 rounded-xl">
                   <div className="text-xs text-primary font-bold uppercase">Цена через LSAuto</div>
-                  <div className="text-xl font-bold">{car.цена.toLocaleString()} ₽</div>
+                  <div className="text-xl font-bold">{car.price.toLocaleString()} ₽</div>
                   <div className="text-[10px] text-primary/70">Прямой импорт, без наценок салонов</div>
                 </div>
                 <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
@@ -145,11 +142,11 @@ export const CarDetail = () => {
               <h3 className="text-xl font-bold">Характеристики</h3>
               <div className="grid grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
                 {[
-                  { icon: Gauge, label: 'Пробег', val: `${car.пробег} км` },
-                  { icon: MapPin, label: 'Локация', val: car.город },
-                  { icon: Calendar, label: 'Год', val: car.год },
-                  { icon: Car, label: 'КПП', val: car.коробка },
-                  { icon: Info, label: 'Топливо', val: car.топливо },
+                  { icon: Gauge, label: 'Пробег', val: `${car.mileage} км` },
+                  { icon: MapPin, label: 'Локация', val: car.city },
+                  { icon: Calendar, label: 'Год', val: car.year },
+                  { icon: Car, label: 'КПП', val: car.transmission },
+                  { icon: Info, label: 'Топливо', val: car.fuel },
                   { icon: ShieldCheck, label: 'Статус', val: 'В наличии' },
                 ].map((item, i) => (
                   <div key={i} className="bg-white/5 p-4 rounded-xl text-center">
@@ -163,7 +160,7 @@ export const CarDetail = () => {
 
             <div className="space-y-4">
               <h3 className="text-xl font-bold">Описание</h3>
-              <p className="text-gray-400 leading-relaxed">{car.описание}</p>
+              <p className="text-gray-400 leading-relaxed">{car.description}</p>
             </div>
           </div>
         </div>
@@ -173,33 +170,33 @@ export const CarDetail = () => {
           <div className="bg-dark-card p-6 rounded-3xl border border-white/5 sticky top-24">
             <h3 className="font-bold text-lg mb-6">Продавец</h3>
             <div className="flex items-center gap-4 mb-6">
-              <img src={supplier?.фотографии?.[0] ?? 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&q=80&w=800'} className="w-16 h-16 rounded-2xl object-cover" />
+              <img src="https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&q=80&w=800" className="w-16 h-16 rounded-2xl object-cover" />
               <div>
-                <h4 className="font-bold">{supplier?.название}</h4>
+                <h4 className="font-bold">Поставщик LSAuto</h4>
                 <div className="flex items-center gap-1.5 text-green-500 text-xs font-bold mt-1">
                   <ShieldCheck size={14} /> ПРОВЕРЕН
                 </div>
               </div>
             </div>
-            
+
             <div className="space-y-4 mb-8">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Город:</span>
-                <span className="font-medium">{supplier?.город}</span>
+                <span className="font-medium">{car.city}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Опыт:</span>
-                <span className="font-medium">{supplier?.опыт}</span>
+                <span className="text-gray-500">Происхождение:</span>
+                <span className="font-medium">{car.origin}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Рейтинг:</span>
-                <span className="font-medium">⭐ {supplier?.рейтинг}</span>
+                <span className="font-medium">⭐ 5.0</span>
               </div>
             </div>
 
             <div className="space-y-3">
               <button
-                onClick={() => car && createDeal(car.марка + ' ' + car.модель)}
+                onClick={() => car && createDeal(car.brand + ' ' + car.model)}
                 className="w-full bg-primary hover:bg-primary-hover text-black font-black py-4 rounded-2xl flex items-center justify-center gap-3 transition-all shadow-2xl shadow-primary/20 uppercase text-xs tracking-widest"
               >
                 Забронировать авто
@@ -220,20 +217,20 @@ export const CarDetail = () => {
                 <a href="https://t.me/lsauto" target="_blank" className="bg-[#24A1DE]/10 hover:bg-[#24A1DE]/20 text-[#24A1DE] border border-[#24A1DE]/20 font-bold py-3 rounded-2xl text-center text-xs transition-all">Telegram</a>
                 <a href="https://wa.me/79990000000" target="_blank" className="bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] border border-[#25D366]/20 font-bold py-3 rounded-2xl text-center text-xs transition-all">WhatsApp</a>
               </div>
-              <button 
+              <button
                 onClick={() => setShowPhone(true)}
                 className="w-full bg-white/5 hover:bg-white/10 border border-white/10 font-bold py-4 rounded-2xl transition-all"
               >
-                {showPhone ? supplier?.контакты : 'Показать телефон'}
+                {showPhone ? '+7 (999) 000-00-00' : 'Показать телефон'}
               </button>
               
               {/* Mobile Fixed CTA */}
               <div className="lg:hidden fixed bottom-[72px] left-0 right-0 p-4 bg-black/80 backdrop-blur-xl border-t border-white/10 flex gap-3 z-[50] animate-in slide-in-from-bottom duration-500">
-                <button 
+                <button
                   onClick={() => setShowPhone(true)}
                   className="flex-1 bg-white/10 text-white font-bold py-4 rounded-2xl text-sm"
                 >
-                  {showPhone ? supplier?.контакты : 'Позвонить'}
+                  {showPhone ? '+7 (999) 000-00-00' : 'Позвонить'}
                 </button>
                 <button 
                   onClick={handleWrite}
@@ -257,7 +254,7 @@ export const CarDetail = () => {
             <div className="flex justify-between items-start mb-6">
               <div>
                 <h2 className="text-2xl font-black">Тест-драйв</h2>
-                <p className="text-gray-400 text-sm mt-1">{car.марка} {car.модель} {car.год}</p>
+                <p className="text-gray-400 text-sm mt-1">{car.brand} {car.model} {car.year}</p>
               </div>
               <button onClick={() => { setTestDriveOpen(false); setTdDone(false); }} className="text-gray-500 hover:text-white transition-colors p-1">
                 <X size={24} />

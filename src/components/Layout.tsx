@@ -113,7 +113,6 @@ const Navbar = () => {
       items: [
         { name: 'Каталог', path: '/catalog', icon: Car, desc: 'Все автомобили' },
         { name: 'Trade-in', path: '/trade-in', icon: RefreshCw, desc: 'Сдать свой авто в зачёт' },
-        { name: 'Акции', path: '/promotions', icon: Zap, desc: 'Скидки и спецпредложения' },
       ],
     },
     {
@@ -122,14 +121,6 @@ const Navbar = () => {
       items: [
         { name: 'Все поставщики', path: '/suppliers', icon: Store, desc: 'Список и карта' },
         { name: 'О сервисе', path: '/about', icon: Info, desc: 'Как работает LSAuto' },
-      ],
-    },
-    {
-      label: 'Контент',
-      icon: Video,
-      items: [
-        { name: 'Лента', path: '/feed', icon: Video, desc: 'Посты и видео поставщиков' },
-        { name: 'Новости', path: '/news', icon: Newspaper, desc: 'Авторынок и тренды' },
       ],
     },
   ];
@@ -350,7 +341,6 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                 <li><Link to="/catalog" className="hover:text-primary">Каталог авто</Link></li>
                 <li><Link to="/suppliers" className="hover:text-primary">Поставщики</Link></li>
                 <li><Link to="/trade-in" className="hover:text-primary">Trade-in</Link></li>
-                <li><Link to="/promotions" className="hover:text-primary">Акции</Link></li>
                 <li><Link to="/about" className="hover:text-primary">О сервисе</Link></li>
               </ul>
             </div>
@@ -360,7 +350,7 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                 <li><Link to="/about" className="hover:text-primary transition-colors">Помощь покупателю</Link></li>
                 <li><Link to="/about" className="hover:text-primary transition-colors">Для поставщиков</Link></li>
                 <li><Link to="/about" className="hover:text-primary transition-colors">Условия использования</Link></li>
-                <li><Link to="/about" className="hover:text-primary transition-colors">Конфиденциальность</Link></li>
+                <li><Link to="/privacy" className="hover:text-primary transition-colors">Политика конфиденциальности</Link></li>
               </ul>
             </div>
           </div>

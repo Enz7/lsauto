@@ -235,6 +235,39 @@ const initDB = async () => {
         `,
       },
       {
+        name: '003_supplier_level_trigger',
+        sql: `
+          CREATE OR REPLACE FUNCTION update_supplier_level()
+          RETURNS TRIGGER AS $$
+          DECLARE
+            deal_count INT;
+            new_level INT;
+          BEGIN
+            SELECT COUNT(*) INTO deal_count FROM deals WHERE user_id = NEW.user_id;
+            new_level := LEAST(8, GREATEST(1,
+              CASE
+                WHEN deal_count >= 100 THEN 8
+                WHEN deal_count >= 50  THEN 7
+                WHEN deal_count >= 25  THEN 6
+                WHEN deal_count >= 15  THEN 5
+                WHEN deal_count >= 8   THEN 4
+                WHEN deal_count >= 4   THEN 3
+                WHEN deal_count >= 1   THEN 2
+                ELSE 1
+              END
+            ));
+            UPDATE users SET level = new_level WHERE id = NEW.user_id;
+            RETURN NEW;
+          END;
+          $$ LANGUAGE plpgsql;
+
+          DROP TRIGGER IF EXISTS trg_supplier_level ON deals;
+          CREATE TRIGGER trg_supplier_level
+            AFTER INSERT ON deals
+            FOR EACH ROW EXECUTE FUNCTION update_supplier_level();
+        `,
+      },
+      {
         name: '004_supplier_profile_and_tables',
         sql: `
           ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(255);
@@ -272,36 +305,10 @@ const initDB = async () => {
         `,
       },
       {
-        name: '003_supplier_level_trigger',
+        name: '005_admin_role_and_rejection',
         sql: `
-          CREATE OR REPLACE FUNCTION update_supplier_level()
-          RETURNS TRIGGER AS $$
-          DECLARE
-            deal_count INT;
-            new_level INT;
-          BEGIN
-            SELECT COUNT(*) INTO deal_count FROM deals WHERE user_id = NEW.user_id;
-            new_level := LEAST(8, GREATEST(1,
-              CASE
-                WHEN deal_count >= 100 THEN 8
-                WHEN deal_count >= 50  THEN 7
-                WHEN deal_count >= 25  THEN 6
-                WHEN deal_count >= 15  THEN 5
-                WHEN deal_count >= 8   THEN 4
-                WHEN deal_count >= 4   THEN 3
-                WHEN deal_count >= 1   THEN 2
-                ELSE 1
-              END
-            ));
-            UPDATE users SET level = new_level WHERE id = NEW.user_id;
-            RETURN NEW;
-          END;
-          $$ LANGUAGE plpgsql;
-
-          DROP TRIGGER IF EXISTS trg_supplier_level ON deals;
-          CREATE TRIGGER trg_supplier_level
-            AFTER INSERT ON deals
-            FOR EACH ROW EXECUTE FUNCTION update_supplier_level();
+          ALTER TABLE cars ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT;
         `,
       },
     ];
@@ -476,7 +483,37 @@ const docUpload = multer({
   },
 });
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Фото авто и видео — публичные
+app.use('/uploads/images', express.static(path.join(__dirname, 'uploads/images')));
+app.use('/uploads/videos', express.static(path.join(__dirname, 'uploads/videos')));
+
+// KYC документы — только владелец или admin
+app.get('/uploads/docs/:filename', authenticateToken, async (req, res) => {
+  try {
+    const filename = path.basename(req.params.filename);
+    const result = await pool.query(
+      'SELECT user_id FROM kyc_documents WHERE file_url LIKE $1',
+      [`%${filename}`]
+    );
+    const doc = result.rows[0];
+    if (!doc) return res.status(404).json({ error: 'Документ не найден' });
+
+    const isOwner = doc.user_id === req.user.id;
+    const isAdmin = req.user.role === 'admin';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Нет доступа' });
+    }
+
+    const filePath = path.resolve(__dirname, 'uploads', 'docs', filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Файл не найден' });
+    }
+    res.sendFile(filePath);
+  } catch (err) {
+    logger.error({ err: err.message }, 'kyc doc access error');
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
 
 if (isProd) {
   const distPath = path.join(__dirname, 'dist');
@@ -529,6 +566,17 @@ const optionalAuth = (req, res, next) => {
     req.user = null;
     next();
   }
+};
+
+// ─── ROLE CHECK MIDDLEWARE ─────────────────────────────────────────────────
+
+const requireRole = (...roles) => (req, res, next) => {
+  if (!req.user) return res.sendStatus(401);
+  if (!roles.includes(req.user.role)) {
+    logger.warn({ userId: req.user.id, role: req.user.role, required: roles, path: req.path }, 'access denied');
+    return res.status(403).json({ error: 'Недостаточно прав' });
+  }
+  next();
 };
 
 // ─── ANTI-FRAUD HELPERS ───────────────────────────────────────────────────
@@ -767,9 +815,9 @@ app.post('/api/v1/cars', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO cars (brand, model, year, price, origin, transmission, fuel, mileage, city, description, images, user_id, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending') RETURNING *`,
       [brand, model, year, price, origin, transmission, fuel, mileage || 0, safeCity, safeDesc,
-       JSON.stringify(images || []), req.user.id, 'approved']
+       JSON.stringify(images || []), req.user.id]
     );
     logger.info({ carId: result.rows[0].id, userId: req.user.id }, 'car created');
     res.status(201).json(result.rows[0]);
@@ -779,7 +827,7 @@ app.post('/api/v1/cars', authenticateToken, async (req, res) => {
   }
 });
 
-app.patch('/api/v1/cars/:id/status', authenticateToken, async (req, res) => {
+app.patch('/api/v1/cars/:id/status', authenticateToken, requireRole('admin'), async (req, res) => {
   const { status } = req.body;
   const valid = ['approved', 'rejected', 'pending'];
   if (!valid.includes(status)) return res.status(400).json({ error: 'Недопустимый статус' });
@@ -977,15 +1025,16 @@ app.get('/api/v1/posts', async (req, res) => {
   }
 });
 
-app.post('/api/v1/posts', authenticateToken, async (req, res) => {
+app.post('/api/v1/posts', authenticateToken, requireRole('Поставщик', 'Посредник', 'admin'), async (req, res) => {
   const title = clean(req.body.title);
   const text = clean(req.body.text);
-  const supplierName = clean(req.body.supplierName) || 'Поставщик';
   const type = clean(req.body.type) || 'new';
   const image = req.body.image || null;
 
   if (!title || !text) return res.status(400).json({ error: 'Заголовок и текст обязательны' });
   try {
+    const userResult = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
+    const supplierName = userResult.rows[0]?.name || 'Поставщик';
     const result = await pool.query(
       `INSERT INTO posts (supplier_id, supplier_name, type, title, text, image)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
@@ -1044,14 +1093,15 @@ app.get('/api/v1/vlogs', async (req, res) => {
   }
 });
 
-app.post('/api/v1/vlogs', authenticateToken, async (req, res) => {
+app.post('/api/v1/vlogs', authenticateToken, requireRole('Поставщик', 'admin'), async (req, res) => {
   const title = clean(req.body.title);
   const description = clean(req.body.description);
-  const supplierName = clean(req.body.supplierName) || 'Поставщик';
   const { video_url, thumbnail } = req.body;
 
   if (!title || !video_url) return res.status(400).json({ error: 'Заголовок и ссылка на видео обязательны' });
   try {
+    const userResult = await pool.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
+    const supplierName = userResult.rows[0]?.name || 'Поставщик';
     const result = await pool.query(
       `INSERT INTO vlogs (supplier_id, supplier_name, title, description, video_url, thumbnail)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
@@ -1096,7 +1146,7 @@ app.get('/api/v1/chat/:roomId', authenticateToken, async (req, res) => {
 
 // ─── FRAUD ─────────────────────────────────────────────────────────────────
 
-app.get('/api/v1/fraud/events', authenticateToken, async (req, res) => {
+app.get('/api/v1/fraud/events', authenticateToken, requireRole('admin'), async (req, res) => {
   const { page, limit, offset } = parsePagination(req.query);
   try {
     const countRes = await pool.query('SELECT COUNT(*) FROM fraud_events');
@@ -1174,7 +1224,7 @@ app.get('/api/v1/suppliers/:id', async (req, res) => {
   }
 });
 
-app.patch('/api/v1/suppliers/:id/verify', authenticateToken, async (req, res) => {
+app.patch('/api/v1/suppliers/:id/verify', authenticateToken, requireRole('admin'), async (req, res) => {
   const { is_verified } = req.body;
   try {
     await pool.query('UPDATE users SET is_verified = $1 WHERE id = $2', [!!is_verified, req.params.id]);
@@ -1236,7 +1286,7 @@ app.post('/api/v1/trade-in', optionalAuth, async (req, res) => {
 
 // ─── ADMIN STATS ───────────────────────────────────────────────────────────
 
-app.get('/api/v1/admin/stats', authenticateToken, async (req, res) => {
+app.get('/api/v1/admin/stats', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     const [usersRes, pendingCarsRes, dealsRes, chatRes, revenueRes] = await Promise.all([
       pool.query(`SELECT COUNT(*) FROM users`),
@@ -1258,7 +1308,7 @@ app.get('/api/v1/admin/stats', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/v1/admin/users', authenticateToken, async (req, res) => {
+app.get('/api/v1/admin/users', authenticateToken, requireRole('admin'), async (req, res) => {
   const { page, limit, offset } = parsePagination(req.query);
   try {
     const countRes = await pool.query('SELECT COUNT(*) FROM users');

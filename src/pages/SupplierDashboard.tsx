@@ -1,7 +1,8 @@
 
 import { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { LayoutDashboard, Car, TrendingUp, Plus, X, Image as ImageIcon, Loader2, Video, Pencil, Trash2, Upload, Film } from 'lucide-react';
+import { LayoutDashboard, Car as CarIcon, TrendingUp, Plus, X, Image as ImageIcon, Loader2, Video, Pencil, Trash2, Upload, Film } from 'lucide-react';
+import type { Car } from '@/types';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { carService } from '../services/apiService';
@@ -24,8 +25,9 @@ const EMPTY_POST: PostForm = { title: '', text: '', type: 'photo', image: '' };
 
 export const SupplierDashboard = () => {
   const navigate = useNavigate();
-  const { userRole, isLoggedIn, notify, addCar, updateCar, addedCars, setAddedCars,
-    isVerified, setActiveChatId, addPost, updatePost, deletePost, setVerified, userRequests, posts } = useApp();
+  const { userRole, isLoggedIn, notify, addCar, updateCar, addedCars, removeCar,
+    isVerified, setActiveChatId, addPost, updatePost, deletePost, setVerified,
+    userRequests, posts, currentUser } = useApp();
 
   // Car modal
   const [carModalOpen, setCarModalOpen] = useState(false);
@@ -52,13 +54,13 @@ export const SupplierDashboard = () => {
   // ── Car helpers ──────────────────────────────────────────
   const openAddCar = () => { setEditCarId(null); setCarForm(EMPTY_CAR); setCarModalOpen(true); };
 
-  const openEditCar = (car: any) => {
+  const openEditCar = (car: Car) => {
     setEditCarId(car.id);
     setCarForm({
-      brand: car.марка, model: car.модель, price: String(car.цена),
-      year: String(car.год), origin: car.страна, mileage: String(car.пробег),
-      transmission: car.коробка, fuel: car.топливо, city: car.город,
-      description: car.описание, images: car.изображения ?? [],
+      brand: car.brand, model: car.model, price: String(car.price),
+      year: String(car.year), origin: car.origin, mileage: String(car.mileage),
+      transmission: car.transmission, fuel: car.fuel, city: car.city,
+      description: car.description, images: car.images ?? [],
     });
     setCarModalOpen(true);
   };
@@ -82,30 +84,34 @@ export const SupplierDashboard = () => {
 
   const handleCarSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const carData = {
-      марка: carForm.brand, модель: carForm.model,
-      год: Number(carForm.year), цена: Number(carForm.price),
-      страна: carForm.origin as any, коробка: carForm.transmission,
-      топливо: carForm.fuel, пробег: Number(carForm.mileage),
-      описание: carForm.description || 'Без описания', город: carForm.city,
-      изображения: carForm.images.length > 0 ? carForm.images : ['https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=800'],
-      тренд: false, теги: ['Новинка'],
+    const carData: Partial<Car> = {
+      brand: carForm.brand,
+      model: carForm.model,
+      year: Number(carForm.year),
+      price: Number(carForm.price),
+      origin: carForm.origin as Car['origin'],
+      transmission: carForm.transmission,
+      fuel: carForm.fuel,
+      mileage: Number(carForm.mileage),
+      description: carForm.description || 'Без описания',
+      city: carForm.city,
+      images: carForm.images.length > 0
+        ? carForm.images
+        : ['https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=800'],
     };
     if (editCarId) {
       updateCar(editCarId, carData);
       notify('Объявление обновлено', 'success');
     } else {
-      await addCar({ ...carData, id: `car-${Date.now()}`, поставщикId: 's1' });
-      notify('Автомобиль опубликован!', 'success');
+      await addCar(carData);
     }
     setCarModalOpen(false);
     setCarForm(EMPTY_CAR);
     setEditCarId(null);
   };
 
-  const handleRemoveCar = (id: string) => {
-    setAddedCars((prev: any) => prev.filter((c: any) => c.id !== id));
-    notify('Объявление снято', 'info');
+  const handleRemoveCar = async (id: string) => {
+    await removeCar(id);
   };
 
   // ── Post helpers ─────────────────────────────────────────
@@ -145,7 +151,6 @@ export const SupplierDashboard = () => {
       notify('Публикация обновлена', 'success');
     } else {
       addPost({
-        supplierId: 's1', supplierName: 'China Auto Export',
         type: postForm.type, title: postForm.title, text: postForm.text,
         image: postForm.image || 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800',
       });
@@ -156,7 +161,7 @@ export const SupplierDashboard = () => {
     setEditPostId(null);
   };
 
-  const myPosts = posts.filter(p => p.supplierId === 's1');
+  const myPosts = posts.filter(p => p.supplierId === currentUser?.id);
 
   const inputCls = 'w-full bg-dark-input border border-white/10 rounded-xl py-3 px-4 outline-none focus:ring-1 focus:ring-primary text-sm';
 
@@ -336,7 +341,6 @@ export const SupplierDashboard = () => {
               <p className="text-gray-400 text-sm leading-relaxed">{selectedPost.text}</p>
               <div className="flex items-center gap-4 pt-2 border-t border-white/5 text-sm text-gray-500">
                 <span>❤️ {selectedPost.likes} лайков</span>
-                <span>💬 {selectedPost.comments} комментариев</span>
               </div>
             </div>
           </div>
@@ -353,7 +357,7 @@ export const SupplierDashboard = () => {
               : <button onClick={() => setIsVerifyModalOpen(true)} className="bg-yellow-500/10 text-yellow-500 text-[10px] font-bold px-2 py-1 rounded-full border border-yellow-500/20 uppercase animate-pulse">Нужна проверка</button>
             }
           </div>
-          <p className="text-gray-400 mt-1">Добро пожаловать, China Auto Export</p>
+          <p className="text-gray-400 mt-1">Добро пожаловать, {currentUser?.name || 'Поставщик'}</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <button onClick={openAddPost} className="flex-1 sm:flex-none bg-white/5 hover:bg-white/10 text-white border border-white/10 font-bold px-5 py-3 rounded-xl flex items-center justify-center gap-2 transition-all">
@@ -374,7 +378,7 @@ export const SupplierDashboard = () => {
           ) : userRequests.map((req, i) => (
             <div key={i} className="bg-dark-card border border-white/10 p-6 rounded-3xl flex justify-between items-center hover:border-primary/20 transition-all">
               <div className="flex items-center gap-6">
-                <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary"><Car size={24} /></div>
+                <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary"><CarIcon size={24} /></div>
                 <div><h4 className="font-bold">{req.brand} {req.model}</h4><p className="text-xs text-gray-500">Бюджет: {req.budget.toLocaleString()} ₽</p></div>
               </div>
               <button onClick={() => { setActiveChatId('u1'); navigate('/messages'); }} className="bg-white/5 hover:bg-primary hover:text-black px-6 py-2.5 rounded-xl text-xs font-bold transition-all">Ответить</button>
@@ -388,7 +392,7 @@ export const SupplierDashboard = () => {
         <h3 className="text-xl font-bold flex items-center gap-2"><LayoutDashboard size={20} className="text-primary" />Мои объявления ({addedCars.length})</h3>
         {addedCars.length === 0 ? (
           <div className="bg-dark-card border border-white/5 rounded-3xl p-12 text-center text-gray-500">
-            <Car size={40} className="mx-auto mb-4 opacity-30" />
+            <CarIcon size={40} className="mx-auto mb-4 opacity-30" />
             <p className="text-sm">Объявлений пока нет — нажмите «Добавить авто»</p>
           </div>
         ) : (
@@ -397,17 +401,20 @@ export const SupplierDashboard = () => {
               <div key={car.id} className="bg-dark-card border border-white/10 rounded-3xl overflow-hidden hover:border-primary/20 transition-all group">
                 <Link to={`/catalog/${car.id}`} className="block">
                   <div className="relative aspect-video overflow-hidden">
-                    <img src={car.изображения?.[0] ?? 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=800'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                    {(car.изображения?.length ?? 0) > 1 && (
+                    <img src={car.images?.[0] ?? 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=800'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    {(car.images?.length ?? 0) > 1 && (
                       <div className="absolute bottom-2 right-2 bg-black/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                        +{(car.изображения?.length ?? 1) - 1} фото
+                        +{(car.images?.length ?? 1) - 1} фото
                       </div>
                     )}
+                    <div className={`absolute top-2 left-2 text-[9px] font-black px-2 py-0.5 rounded-full ${car.status === 'approved' ? 'bg-green-500 text-white' : car.status === 'rejected' ? 'bg-red-500 text-white' : 'bg-yellow-500 text-black'}`}>
+                      {car.status === 'approved' ? 'Опубликовано' : car.status === 'rejected' ? 'Отклонено' : 'На проверке'}
+                    </div>
                   </div>
                   <div className="p-5 space-y-1">
-                    <h5 className="font-bold">{car.марка} {car.модель}</h5>
-                    <p className="text-primary font-bold text-sm">{car.цена.toLocaleString()} ₽</p>
-                    <p className="text-xs text-gray-500">{car.год} • {car.город}</p>
+                    <h5 className="font-bold">{car.brand} {car.model}</h5>
+                    <p className="text-primary font-bold text-sm">{Number(car.price).toLocaleString()} ₽</p>
+                    <p className="text-xs text-gray-500">{car.year} • {car.city}</p>
                   </div>
                 </Link>
                 <div className="px-5 pb-5 flex items-center gap-3">

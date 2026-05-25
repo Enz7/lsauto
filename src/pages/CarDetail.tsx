@@ -1,9 +1,11 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { ChevronLeft, MapPin, ShieldCheck, MessageCircle, Info, TrendingUp, Gauge, Calendar, Car, Scale, Heart, X, CheckCircle2, ZoomIn } from 'lucide-react';
+import { ChevronLeft, MapPin, ShieldCheck, MessageCircle, Info, TrendingUp, Gauge, Calendar, Car, Scale, Heart, X, CheckCircle2, ZoomIn, Loader2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { carService } from '../services/apiService';
+import type { Car as CarType } from '@/types';
 
 export const CarDetail = () => {
   const { id } = useParams();
@@ -19,9 +21,28 @@ export const CarDetail = () => {
   const [tdTime, setTdTime] = useState('');
   const [tdDone, setTdDone] = useState(false);
 
+  const [fetchedCar, setFetchedCar] = useState<CarType | null>(null);
+  const [fetchLoading, setFetchLoading] = useState(false);
+
+  const contextCar = allCars.find(c => c.id === id);
+  const car = contextCar ?? fetchedCar;
+
+  useEffect(() => {
+    if (!id || contextCar) return;
+    setFetchLoading(true);
+    carService.getById(id)
+      .then(c => setFetchedCar(c))
+      .finally(() => setFetchLoading(false));
+  }, [id, contextCar]);
+
   const isFav = id ? favorites.includes(id) : false;
   const isCompare = id ? compareList.includes(id) : false;
-  const car = allCars.find(c => c.id === id);
+
+  if (fetchLoading) return (
+    <div className="flex items-center justify-center py-40 animate-in fade-in duration-500">
+      <Loader2 size={48} className="text-primary animate-spin" />
+    </div>
+  );
 
   if (!car) return (
     <div className="text-center py-20 animate-in fade-in duration-500">

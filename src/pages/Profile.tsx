@@ -88,7 +88,7 @@ export const Profile = () => {
           {/* Статистика поставщика */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { label: 'Мои авто', val: addedCars.length + 3, icon: Car, color: 'text-blue-500' },
+              { label: 'Мои авто', val: addedCars.length, icon: Car, color: 'text-blue-500' },
               { label: 'Просмотры', val: '1,240', icon: Users, color: 'text-primary' },
               { label: 'Сделки', val: '45', icon: TrendingUp, color: 'text-green-500' },
               { label: 'Рейтинг', val: '4.9', icon: Star, color: 'text-yellow-500' },

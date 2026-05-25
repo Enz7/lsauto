@@ -1,9 +1,11 @@
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Filter, ChevronDown, SlidersHorizontal, MapPin, Gauge, Heart, Scale, X as CloseIcon } from 'lucide-react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { Filter, ChevronDown, SlidersHorizontal, MapPin, Gauge, Heart, Scale, X as CloseIcon, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Helmet } from 'react-helmet-async';
+import { carService } from '../services/apiService';
+import type { Car } from '@/types';
 
 const SupplierBadge = ({ level }: { level: number }) => {
   const getRank = (l: number) => {
@@ -59,13 +61,20 @@ export const Catalog = () => {
   const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
+  const [cars, setCars] = useState<Car[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Sync navigation links (e.g. /catalog?origin=Китай from Home) → state
   const urlOrigin = searchParams.get('origin') || '';
   const urlSearch = searchParams.get('search') || '';
   useEffect(() => { setOrigin(urlOrigin); }, [urlOrigin]);
   useEffect(() => { setSearchTerm(urlSearch); }, [urlSearch]);
 
-  // Sync state → URL (replace so back button skips individual filter changes)
+  // Sync state → URL
   const syncURL = useCallback(() => {
     const p: Record<string, string> = {};
     if (searchTerm) p.search = searchTerm;
@@ -90,10 +99,44 @@ export const Catalog = () => {
 
   useEffect(() => { syncURL(); }, [syncURL]);
 
-  const allAvailableCars = useMemo(() =>
-    allCars.filter(c => c.status === 'approved'),
-  [allCars]);
+  // Server-side fetch with debounce
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setIsLoading(true);
+      try {
+        const apiSort = sort === 'price-asc' ? 'price_asc' : sort === 'price-desc' ? 'price_desc' : sort === 'year' ? 'year_desc' : undefined;
+        const result = await carService.getAll({
+          page,
+          limit: 20,
+          brand: brand || undefined,
+          origin: origin || undefined,
+          transmission: transmission || undefined,
+          fuel: fuel || undefined,
+          minPrice: priceRange.min ? Number(priceRange.min) : undefined,
+          maxPrice: priceRange.max ? Number(priceRange.max) : undefined,
+          minYear: yearRange.min ? Number(yearRange.min) : undefined,
+          maxYear: yearRange.max ? Number(yearRange.max) : undefined,
+          search: searchTerm || undefined,
+          sort: apiSort,
+        });
+        setCars(result.data);
+        setTotal(result.pagination.total);
+        setTotalPages(result.pagination.totalPages);
+      } catch {
+        setCars([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [page, brand, origin, transmission, fuel, priceRange, yearRange, searchTerm, sort]);
 
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [brand, origin, transmission, fuel, priceRange, yearRange, searchTerm, sort]);
+
+  // Dropdown options derived from context allCars (initial load)
+  const allAvailableCars = useMemo(() => allCars.filter(c => c.status === 'approved'), [allCars]);
   const brands = useMemo(() => Array.from(new Set(allAvailableCars.map(c => c.brand))).sort(), [allAvailableCars]);
   const models = useMemo(() => {
     if (!brand) return [];
@@ -105,7 +148,6 @@ export const Catalog = () => {
       allAvailableCars.filter(c => c.brand === brand && c.model === model && c.generation).map(c => c.generation!)
     ));
   }, [brand, model, allAvailableCars]);
-
   const bodies = useMemo(() =>
     Array.from(new Set(allAvailableCars.filter(c => c.bodyType).map(c => c.bodyType!))).sort(),
     [allAvailableCars]);
@@ -117,39 +159,6 @@ export const Catalog = () => {
   const transmissions = ['Автомат', 'Механика', 'Редуктор'];
   const fuels = ['Бензин', 'Дизель', 'Электро', 'Гибрид'];
 
-  const filteredAndSortedCars = useMemo(() => {
-    let result = allAvailableCars.filter(car => {
-      const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = !searchTerm ||
-        car.brand.toLowerCase().includes(searchLower) ||
-        car.model.toLowerCase().includes(searchLower) ||
-        car.city.toLowerCase().includes(searchLower);
-
-      return matchesSearch &&
-             (!origin || car.origin === origin) &&
-             (!brand || car.brand === brand) &&
-             (!model || car.model === model) &&
-             (!generation || car.generation === generation) &&
-             (!transmission || car.transmission === transmission) &&
-             (!fuel || car.fuel === fuel) &&
-             (!body || car.bodyType === body) &&
-             (!drive || car.driveType === drive) &&
-             (!engineVolume || car.engineVolume === Number(engineVolume)) &&
-             (!powerRange.min || (car.power ?? 0) >= Number(powerRange.min)) &&
-             (!powerRange.max || (car.power ?? 0) <= Number(powerRange.max)) &&
-             (!priceRange.min || car.price >= Number(priceRange.min)) &&
-             (!priceRange.max || car.price <= Number(priceRange.max)) &&
-             (!yearRange.min || car.year >= Number(yearRange.min)) &&
-             (!yearRange.max || car.year <= Number(yearRange.max));
-    });
-
-    if (sort === 'price-asc') result.sort((a, b) => a.price - b.price);
-    if (sort === 'price-desc') result.sort((a, b) => b.price - a.price);
-    if (sort === 'year') result.sort((a, b) => b.year - a.year);
-
-    return result;
-  }, [allAvailableCars, searchTerm, origin, brand, model, generation, transmission, fuel, body, drive, engineVolume, powerRange, priceRange, yearRange, sort]);
-
   return (
     <div className="flex flex-col gap-8 pb-20">
       <Helmet>
@@ -159,7 +168,7 @@ export const Catalog = () => {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <h1 className="text-3xl md:text-4xl font-bold mb-2 uppercase tracking-tighter">Каталог</h1>
-          <p className="text-gray-400 text-sm">Найдено {filteredAndSortedCars.length} автомобилей</p>
+          <p className="text-gray-400 text-sm">Найдено {total} автомобилей</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -272,7 +281,7 @@ export const Catalog = () => {
         </div>
 
           <button className="w-full bg-primary text-black font-bold py-3 rounded-xl transition-all hover:bg-primary-hover mt-4">
-            Показать авто ({filteredAndSortedCars.length})
+            Показать авто ({total})
           </button>
         </aside>
 
@@ -331,7 +340,7 @@ export const Catalog = () => {
                   onClick={() => setIsMobileFiltersOpen(false)}
                   className="w-full bg-primary text-black font-black py-5 rounded-[2rem] shadow-2xl shadow-primary/20 uppercase tracking-widest"
                 >
-                  Показать ({filteredAndSortedCars.length})
+                  Показать ({total})
                 </button>
               </div>
             </div>
@@ -346,76 +355,122 @@ export const Catalog = () => {
               <button onClick={() => setSearchTerm('')} className="text-primary text-xs ml-2 hover:underline">Очистить</button>
             </div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-            {filteredAndSortedCars.map(car => {
-              const isFav = favorites.includes(car.id);
-              const isCompare = compareList.includes(car.id);
-              return (
-                <div key={car.id} className="relative group">
-                  <div className="absolute top-4 right-4 z-10 flex gap-2">
-                    <button
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleCompare(car.id); }}
-                      className={`p-3 rounded-full backdrop-blur-md transition-all ${
-                        isCompare ? 'bg-primary text-black' : 'bg-black/50 text-white hover:bg-white/20'
-                      }`}
-                      title="Сравнить"
-                    >
-                      <Scale size={18} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFavorite(car.id); }}
-                      className={`p-3 rounded-full backdrop-blur-md transition-all ${
-                        isFav ? 'bg-primary text-black' : 'bg-black/50 text-white hover:bg-white/20'
-                      }`}
-                    >
-                      <Heart size={18} fill={isFav ? 'currentColor' : 'none'} />
-                    </button>
-                  </div>
-                  <Link 
-                    to={`/catalog/${car.id}`}
-                    className="bg-dark-card border border-white/5 rounded-2xl overflow-hidden hover:border-primary/40 transition-all flex flex-col h-full"
-                  >
-                    <div className="relative aspect-[16/9]">
-                      <img src={car.images?.[0] ?? 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=800'} alt={car.brand} className="w-full h-full object-cover" />
-                      <div className="absolute top-4 left-4">
-                        <SupplierBadge level={5} />
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-32">
+              <Loader2 size={48} className="text-primary animate-spin" />
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                {cars.map(car => {
+                  const isFav = favorites.includes(car.id);
+                  const isCompare = compareList.includes(car.id);
+                  return (
+                    <div key={car.id} className="relative group">
+                      <div className="absolute top-4 right-4 z-10 flex gap-2">
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleCompare(car.id); }}
+                          className={`p-3 rounded-full backdrop-blur-md transition-all ${
+                            isCompare ? 'bg-primary text-black' : 'bg-black/50 text-white hover:bg-white/20'
+                          }`}
+                          title="Сравнить"
+                        >
+                          <Scale size={18} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFavorite(car.id); }}
+                          className={`p-3 rounded-full backdrop-blur-md transition-all ${
+                            isFav ? 'bg-primary text-black' : 'bg-black/50 text-white hover:bg-white/20'
+                          }`}
+                        >
+                          <Heart size={18} fill={isFav ? 'currentColor' : 'none'} />
+                        </button>
                       </div>
-                    </div>
-                    <div className="p-5 flex-grow">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h2 className="text-xl font-bold">{car.brand} {car.model}</h2>
-                          <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
-                            <span className="flex items-center gap-1"><MapPin size={12} /> {car.city}</span>
-                            <span className="flex items-center gap-1"><Gauge size={12} /> {car.mileage.toLocaleString()} км</span>
+                      <Link
+                        to={`/catalog/${car.id}`}
+                        className="bg-dark-card border border-white/5 rounded-2xl overflow-hidden hover:border-primary/40 transition-all flex flex-col h-full"
+                      >
+                        <div className="relative aspect-[16/9]">
+                          <img src={car.images?.[0] ?? 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=800'} alt={car.brand} className="w-full h-full object-cover" />
+                          <div className="absolute top-4 left-4">
+                            <SupplierBadge level={5} />
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-primary leading-none">{car.price.toLocaleString()} ₽</div>
+                        <div className="p-5 flex-grow">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h2 className="text-xl font-bold">{car.brand} {car.model}</h2>
+                              <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+                                <span className="flex items-center gap-1"><MapPin size={12} /> {car.city}</span>
+                                <span className="flex items-center gap-1"><Gauge size={12} /> {car.mileage.toLocaleString()} км</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-primary leading-none">{car.price.toLocaleString()} ₽</div>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-400 line-clamp-2 mb-4">{car.description}</p>
+                          <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-auto">
+                            <div className="flex gap-2 text-[10px] uppercase font-bold text-gray-500">
+                              {car.origin} • {car.fuel}
+                            </div>
+                            <div className="text-xs text-primary font-bold">Подробнее</div>
+                          </div>
                         </div>
-                      </div>
-                      <p className="text-sm text-gray-400 line-clamp-2 mb-4">{car.description}</p>
-                      <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-auto">
-                        <div className="flex gap-2 text-[10px] uppercase font-bold text-gray-500">
-                          {car.origin} • {car.fuel}
-                        </div>
-                        <div className="text-xs text-primary font-bold">Подробнее</div>
-                      </div>
+                      </Link>
                     </div>
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-
-          {filteredAndSortedCars.length === 0 && (
-            <div className="text-center py-20">
-              <div className="bg-dark-card inline-block p-6 rounded-3xl mb-4">
-                <Filter size={48} className="text-gray-600 mx-auto" />
+                  );
+                })}
               </div>
-              <h3 className="text-xl font-bold mb-2">Ничего не найдено</h3>
-              <p className="text-gray-400">Попробуйте изменить параметры фильтрации</p>
-            </div>
+
+              {cars.length === 0 && (
+                <div className="text-center py-20">
+                  <div className="bg-dark-card inline-block p-6 rounded-3xl mb-4">
+                    <Filter size={48} className="text-gray-600 mx-auto" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-2">Ничего не найдено</h3>
+                  <p className="text-gray-400">Попробуйте изменить параметры фильтрации</p>
+                </div>
+              )}
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-3 mt-10">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="p-2 rounded-xl bg-white/5 border border-white/10 disabled:opacity-30 hover:bg-white/10 transition-all"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                    .map((p, idx, arr) => (
+                      <>
+                        {idx > 0 && arr[idx - 1] !== p - 1 && (
+                          <span key={`dots-${p}`} className="text-gray-600 px-1">…</span>
+                        )}
+                        <button
+                          key={p}
+                          onClick={() => setPage(p)}
+                          className={`w-10 h-10 rounded-xl font-bold text-sm transition-all ${
+                            page === p ? 'bg-primary text-black' : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      </>
+                    ))}
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="p-2 rounded-xl bg-white/5 border border-white/10 disabled:opacity-30 hover:bg-white/10 transition-all"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

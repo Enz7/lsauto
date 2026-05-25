@@ -130,6 +130,27 @@ export const carService = {
     return response.data.url as string;
   },
 
+  getById: async (id: string): Promise<Car | null> => {
+    try {
+      const response = await api.get(`/cars/${id}`);
+      return mapApiCar(response.data);
+    } catch {
+      return null;
+    }
+  },
+
+  getMy: async (): Promise<{ data: Car[]; pagination: Pagination }> => {
+    const response = await api.get('/cars/my');
+    if (Array.isArray(response.data)) {
+      return { data: response.data.map(mapApiCar), pagination: { page: 1, limit: response.data.length, total: response.data.length, totalPages: 1 } };
+    }
+    return { data: response.data.data.map(mapApiCar), pagination: response.data.pagination };
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/cars/${id}`);
+  },
+
   uploadVideo: async (file: File, onProgress?: (pct: number) => void): Promise<string> => {
     const formData = new FormData();
     formData.append('video', file);

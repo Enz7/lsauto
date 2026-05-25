@@ -26,6 +26,8 @@ interface AppContextType {
   isLoggedIn: boolean;
   userRole: string | null;
   activeChatId: string | null;
+  addedCars: Car[];
+  removeCar: (id: string) => Promise<void>;
   setPendingCars: React.Dispatch<React.SetStateAction<Car[]>>;
   setCurrentUser: (user: User | null) => void;
   addCar: (car: Partial<Car>) => Promise<void>;
@@ -80,6 +82,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [posts, setPosts] = useState<Post[]>([]);
   const [reviews, setReviews] = useState<Review[]>(() => safeGet('lsauto_reviews', []));
   const [deals, setDeals] = useState<Deal[]>(() => safeGet('lsauto_deals', []));
+  const [addedCars, setAddedCarsState] = useState<Car[]>([]);
   const [systemUsers, setSystemUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
@@ -142,6 +145,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         role: user.role, isVerified: user.is_verified, level: user.level,
         city: user.city, description: user.description, phone: user.phone,
       }))
+      .catch(() => {});
+
+    carService.getMy()
+      .then(res => setAddedCarsState(res.data))
       .catch(() => {});
 
     requestService.getAll({ limit: 100 })
@@ -207,9 +214,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addCar = async (carData: Partial<Car>) => {
     try {
       await carService.create(carData);
+      carService.getMy().then(res => setAddedCarsState(res.data)).catch(() => {});
       notify('Объявление отправлено на проверку. Обычно проверяем в течение 2 часов.', 'info');
     } catch {
       notify('Не удалось создать объявление', 'error');
+    }
+  };
+
+  const removeCar = async (id: string) => {
+    try {
+      await carService.delete(id);
+      setAddedCarsState(prev => prev.filter(c => c.id !== id));
+      notify('Объявление снято', 'info');
+    } catch {
+      notify('Не удалось снять объявление', 'error');
     }
   };
 
@@ -350,6 +368,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       favorites, compareList, pendingCars, allCars, carsLoading, carsPagination,
       trends, chats, posts, reviews, deals, userRequests, appNotifications,
       systemUsers, currentUser, isVerified, isLoggedIn, userRole, activeChatId,
+      addedCars, removeCar,
       setPendingCars, setCurrentUser,
       addCar, updateCar, approveCar, rejectCar, deleteRequest, createDeal,
       verifyUser, addPost, updatePost, deletePost, likePost, addReview,

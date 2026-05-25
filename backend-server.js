@@ -822,6 +822,57 @@ app.post('/api/v1/cars', authenticateToken, async (req, res) => {
   }
 });
 
+// My cars — все статусы (только владелец)
+app.get('/api/v1/cars/my', authenticateToken, async (req, res) => {
+  const { page, limit, offset } = parsePagination(req.query);
+  try {
+    const countRes = await pool.query('SELECT COUNT(*) FROM cars WHERE user_id = $1', [req.user.id]);
+    const total = parseInt(countRes.rows[0].count);
+    const result = await pool.query(
+      'SELECT * FROM cars WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [req.user.id, limit, offset]
+    );
+    res.json({ data: result.rows, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  } catch (err) {
+    logger.error({ err: err.message }, 'cars/my error');
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// Single car by ID
+app.get('/api/v1/cars/:id', optionalAuth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM cars WHERE id = $1', [req.params.id]);
+    if (!result.rows[0]) return res.status(404).json({ error: 'Автомобиль не найден' });
+    const car = result.rows[0];
+    if (car.status !== 'approved') {
+      if (!req.user || (req.user.id !== car.user_id && req.user.role !== 'admin')) {
+        return res.status(404).json({ error: 'Автомобиль не найден' });
+      }
+    }
+    res.json(car);
+  } catch (err) {
+    logger.error({ err: err.message }, 'car/:id error');
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// Delete own car
+app.delete('/api/v1/cars/:id', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM cars WHERE id = $1 AND user_id = $2 RETURNING id',
+      [req.params.id, req.user.id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Объявление не найдено или нет доступа' });
+    logger.info({ carId: req.params.id, userId: req.user.id }, 'car deleted');
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err: err.message }, 'car delete error');
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
 app.patch('/api/v1/cars/:id/status', authenticateToken, requireRole('admin'), async (req, res) => {
   const { status } = req.body;
   const valid = ['approved', 'rejected', 'pending'];

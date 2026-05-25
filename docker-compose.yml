@@ -1,48 +1,30 @@
-
 services:
-  # База данных PostgreSQL
   db:
     image: postgres:15-alpine
     restart: always
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_USER: lsauto
+      POSTGRES_PASSWORD: LSauto2024secure
       POSTGRES_DB: lsauto
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d lsauto"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U lsauto -d lsauto"]
+      interval: 10s
       timeout: 5s
       retries: 5
 
-  # Панель управления БД (только для разработки)
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - "8080:8080"
-    depends_on:
-      - db
-    profiles:
-      - dev
-
-  # Бэкенд + Фронтенд (продакшен)
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     restart: always
-    ports:
-      - "3000:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://user:password@db:5432/lsauto
-      JWT_SECRET: ${JWT_SECRET:-change_this_secret_key_before_deploy}
-      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-*}
+      DATABASE_URL: postgresql://lsauto:LSauto2024secure@db:5432/lsauto
+      JWT_SECRET: ${JWT_SECRET}
+      ALLOWED_ORIGIN: https://lsautohub.ru
+    ports:
+      - "127.0.0.1:3000:3000"
     depends_on:
       db:
         condition: service_healthy

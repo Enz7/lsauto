@@ -515,11 +515,6 @@ app.get('/uploads/docs/:filename', authenticateToken, async (req, res) => {
   }
 });
 
-if (isProd) {
-  const distPath = path.join(__dirname, 'dist');
-  if (fs.existsSync(distPath)) app.use(express.static(distPath));
-}
-
 // ─── RATE LIMITER ──────────────────────────────────────────────────────────
 
 const authAttempts = new Map();
@@ -1372,14 +1367,11 @@ app.get('/api/health', async (req, res) => {
 
 // ─── SPA FALLBACK ──────────────────────────────────────────────────────────
 
-if (isProd) {
-  app.get('*', (req, res) => {
-    const indexPath = path.join(__dirname, 'dist', 'index.html');
-    if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath);
-    } else {
-      res.status(404).send('Frontend не собран. Запустите npm run build.');
-    }
+const distPath = path.join(__dirname, 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get(/^(?!\/api).*$/, (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
   });
 }
 

@@ -708,7 +708,7 @@ app.post('/api/v1/auth/logout', (req, res) => {
 app.get('/api/v1/auth/me', authenticateToken, async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT id, name, email, role, level, is_verified, fraud_score FROM users WHERE id = $1',
+      'SELECT id, name, email, role, level, is_verified, fraud_score, city, description, phone, photo_url, experience, rating FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!r.rows[0]) return res.status(404).json({ error: 'Пользователь не найден' });
@@ -810,7 +810,7 @@ app.post('/api/v1/cars', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO cars (brand, model, year, price, origin, transmission, fuel, mileage, city, description, images, user_id, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending') RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'approved') RETURNING *`,
       [brand, model, year, price, origin, transmission, fuel, mileage || 0, safeCity, safeDesc,
        JSON.stringify(images || []), req.user.id]
     );
@@ -818,6 +818,33 @@ app.post('/api/v1/cars', authenticateToken, async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (err) {
     logger.error({ err: err.message }, 'cars post error');
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+app.put('/api/v1/cars/:id', authenticateToken, async (req, res) => {
+  const brand = clean(req.body.brand);
+  const model = clean(req.body.model);
+  const safeCity = clean(req.body.city);
+  const safeDesc = clean(req.body.description);
+  const { year, price, origin, transmission, fuel, mileage, images } = req.body;
+
+  if (!brand || !model || !price) {
+    return res.status(400).json({ error: 'Укажите марку, модель и цену' });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE cars SET brand=$1, model=$2, year=$3, price=$4, origin=$5, transmission=$6,
+       fuel=$7, mileage=$8, city=$9, description=$10, images=$11
+       WHERE id=$12 AND user_id=$13 RETURNING *`,
+      [brand, model, year, price, origin, transmission, fuel, mileage || 0,
+       safeCity, safeDesc, JSON.stringify(images || []), req.params.id, req.user.id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Объявление не найдено или нет доступа' });
+    logger.info({ carId: req.params.id, userId: req.user.id }, 'car updated');
+    res.json(result.rows[0]);
+  } catch (err) {
+    logger.error({ err: err.message }, 'car update error');
     res.status(500).json({ error: 'Ошибка сервера' });
   }
 });
@@ -926,13 +953,15 @@ app.post('/api/v1/upload/kyc', authenticateToken, docUpload.single('document'), 
 
 app.get('/api/v1/requests', authenticateToken, async (req, res) => {
   const { page, limit, offset } = parsePagination(req.query);
+  const isAdmin = req.user.role === 'admin';
   try {
-    const countRes = await pool.query('SELECT COUNT(*) FROM requests');
+    const countRes = isAdmin
+      ? await pool.query('SELECT COUNT(*) FROM requests')
+      : await pool.query('SELECT COUNT(*) FROM requests WHERE user_id = $1', [req.user.id]);
     const total = parseInt(countRes.rows[0].count);
-    const result = await pool.query(
-      'SELECT * FROM requests ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
-    );
+    const result = isAdmin
+      ? await pool.query('SELECT * FROM requests ORDER BY created_at DESC LIMIT $1 OFFSET $2', [limit, offset])
+      : await pool.query('SELECT * FROM requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3', [req.user.id, limit, offset]);
     res.json({ data: result.rows, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   } catch (err) {
     logger.error({ err: err.message }, 'requests get error');

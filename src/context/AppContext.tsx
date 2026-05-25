@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Car, Deal, UserRequest, Post, AppNotification, User, Trend, Pagination } from '@/types';
-import { carService, requestService, favoriteService, dealService, postService, authService } from '../services/apiService';
+import { carService, requestService, favoriteService, dealService, postService, authService, profileService } from '../services/apiService';
 
 interface Review { id: string; supplierId: string; user: string; text: string; rating: number; date: string; }
 interface ChatMessage { sender: string; text: string; time: string; isOwn: boolean; }
@@ -46,7 +46,7 @@ interface AppContextType {
   updatePost: (id: number, data: Partial<Post>) => void;
   deletePost: (id: number) => Promise<void>;
   likePost: (id: number) => Promise<void>;
-  updateCar: (id: string, data: Partial<Car>) => void;
+  updateCar: (id: string, data: Partial<Car>) => Promise<void>;
   addReview: (review: Partial<Review>) => void;
   submitRequest: (data: any) => Promise<void>;
   sendMessage: (chatId: string, text: string) => void;
@@ -144,6 +144,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: String(user.id), name: user.name, email: user.email,
         role: user.role, isVerified: user.is_verified, level: user.level,
         city: user.city, description: user.description, phone: user.phone,
+        photo_url: user.photo_url, experience: user.experience, rating: user.rating,
       }))
       .catch(() => {});
 
@@ -271,13 +272,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateCar = (id: string, data: Partial<Car>) => {
+  const updateCar = async (id: string, data: Partial<Car>) => {
     setApiCars(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+    setAddedCarsState(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+    try {
+      const updated = await carService.update(id, data);
+      setAddedCarsState(prev => prev.map(c => c.id === id ? updated : c));
+      notify('Объявление обновлено', 'success');
+    } catch {
+      carService.getMy().then(res => setAddedCarsState(res.data)).catch(() => {});
+      notify('Не удалось сохранить изменения', 'error');
+    }
   };
 
   const addPost = async (postData: Partial<Post>) => {
     const tempId = Date.now();
-    const optimistic = { ...postData, id: tempId, likes: 0, date: 'Только что' } as Post;
+    const optimistic = {
+      ...postData,
+      id: tempId, likes: 0, date: 'Только что',
+      supplierId: currentUser ? String(currentUser.id) : '',
+      supplierName: currentUser?.name ?? 'Поставщик',
+    } as Post;
     setPosts(prev => [optimistic, ...prev]);
     try {
       const created = await postService.create({
@@ -374,13 +389,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       verifyUser, addPost, updatePost, deletePost, likePost, addReview,
       setVerified: (v) => setIsVerified(v), setActiveChatId,
       toggleFavorite: (id) => {
+        if (!isLoggedIn) {
+          notify('Войдите, чтобы добавить в избранное', 'info');
+          return;
+        }
         const prev = favorites;
         const isAdding = !prev.includes(id);
         setFavorites(isAdding ? [...prev, id] : prev.filter(f => f !== id));
         const apiCall = isAdding ? favoriteService.add(id) : favoriteService.remove(id);
         apiCall.catch(() => setFavorites(prev));
       },
-      toggleCompare: (id) => setCompareList(p => p.includes(id) ? p.filter(f => f !== id) : [...p, id]),
+      toggleCompare: (id) => {
+        if (!isLoggedIn) { notify('Войдите, чтобы добавить в сравнение', 'info'); return; }
+        setCompareList(p => p.includes(id) ? p.filter(f => f !== id) : [...p, id]);
+      },
       clearFavorites: () => setFavorites([]),
       clearCompare: () => setCompareList([]),
       submitRequest, sendMessage,

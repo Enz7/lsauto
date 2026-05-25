@@ -147,6 +147,17 @@ export const carService = {
     return { data: response.data.data.map(mapApiCar), pagination: response.data.pagination };
   },
 
+  update: async (id: string, car: Partial<Car>): Promise<Car> => {
+    const payload = {
+      brand: car.brand, model: car.model, year: car.year, price: car.price,
+      origin: car.origin, transmission: car.transmission, fuel: car.fuel,
+      mileage: car.mileage, city: car.city, description: car.description,
+      images: car.images ?? [],
+    };
+    const response = await api.put(`/cars/${id}`, payload);
+    return mapApiCar(response.data);
+  },
+
   delete: async (id: string): Promise<void> => {
     await api.delete(`/cars/${id}`);
   },
